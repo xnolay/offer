@@ -18,8 +18,8 @@
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
         body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
         .custom-scroll::-webkit-scrollbar { width: 5px; }
-        .custom-scroll::-webkit-scrollbar-track { background: #f1f1f1; }
         .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .modal-blur { backdrop-filter: blur(8px); background-color: rgba(15, 23, 42, 0.7); }
     </style>
 </head>
 <body>
@@ -56,20 +56,41 @@
                 style: 'currency', currency: 'IDR', maximumFractionDigits: 0 
             }).format(val);
 
-            // FUNGSI TERBILANG
+            // --- FUNGSI TERBILANG INDONESIA ---
             const terbilang = (n) => {
+                if (n < 0) return "Minus " + terbilang(-n);
+                if (n === 0) return "";
                 const num = ["", "Satu", "Dua", "Tiga", "Empat", "Lima", "Enam", "Tujuh", "Delapan", "Sembilan", "Sepuluh", "Sebelas"];
-                let temp = "";
-                if (n < 12) temp = " " + num[n];
-                else if (n < 20) temp = terbilang(n - 10) + " Belas";
-                else if (n < 100) temp = terbilang(Math.floor(n / 10)) + " Puluh" + terbilang(n % 10);
-                else if (n < 200) temp = " Seratus" + terbilang(n - 100);
-                else if (n < 1000) temp = terbilang(Math.floor(n / 100)) + " Ratus" + terbilang(n % 100);
-                else if (n < 2000) temp = " Seribu" + terbilang(n - 1000);
-                else if (n < 1000000) temp = terbilang(Math.floor(n / 1000)) + " Ribu" + terbilang(n % 1000);
-                else if (n < 1000000000) temp = terbilang(Math.floor(n / 1000000)) + " Juta" + terbilang(n % 1000000);
-                else if (n < 1000000000000) temp = terbilang(Math.floor(n / 1000000000)) + " Miliar" + terbilang(n % 1000000000);
-                return temp;
+                let res = "";
+                if (n < 12) res = num[n];
+                else if (n < 20) res = terbilang(n - 10) + " Belas";
+                else if (n < 100) res = terbilang(Math.floor(n / 10)) + " Puluh " + terbilang(n % 10);
+                else if (n < 200) res = " Seratus " + terbilang(n - 100);
+                else if (n < 1000) res = terbilang(Math.floor(n / 100)) + " Ratus " + terbilang(n % 100);
+                else if (n < 2000) res = " Seribu " + terbilang(n - 1000);
+                else if (n < 1000000) res = terbilang(Math.floor(n / 1000)) + " Ribu " + terbilang(n % 1000);
+                else if (n < 1000000000) res = terbilang(Math.floor(n / 1000000)) + " Juta " + terbilang(n % 1000000);
+                else if (n < 1000000000000) res = terbilang(Math.floor(n / 1000000000)) + " Miliar " + terbilang(n % 1000000000);
+                return res.trim().replace(/\s+/g, ' ');
+            };
+
+            // Parser CSV yang handal (handle quoted comma)
+            const parseCSV = (text) => {
+                const lines = text.split(/\r?\n/).filter(line => line.trim());
+                return lines.map(line => {
+                    const result = [];
+                    let cur = '';
+                    let inQuote = false;
+                    for (let char of line) {
+                        if (char === '"') inQuote = !inQuote;
+                        else if (char === ',' && !inQuote) {
+                            result.push(cur.trim());
+                            cur = '';
+                        } else cur += char;
+                    }
+                    result.push(cur.trim());
+                    return result;
+                });
             };
 
             const handlePriceUpload = (e) => {
@@ -77,13 +98,11 @@
                 if (!file) return;
                 const reader = new FileReader();
                 reader.onload = (event) => {
-                    const lines = event.target.result.split(/\r?\n/).filter(l => l.trim());
-                    const parsed = lines.slice(1).map((line, i) => {
-                        const cols = line.match(/(".*?"|[^,]+)(?=\s*,|\s*$)/g)?.map(c => c.trim().replace(/"/g, '')) || [];
+                    const rows = parseCSV(event.target.result);
+                    const parsed = rows.slice(1).map((cols, i) => {
                         if (cols.length < 2) return null;
-                        const cleanVal = cols[1].split('.')[0].replace(/[^\d]/g, '');
-                        const isp = parseInt(cleanVal) || 0;
-                        const name = cols[0];
+                        const name = cols[0].replace(/^"|"$/g, '');
+                        const isp = parseInt(cols[1].split('.')[0].replace(/[^\d]/g, '')) || 0;
                         let cat = "Lainnya";
                         const ln = name.toLowerCase();
                         if (ln.includes("adss")) cat = "ADSS";
@@ -92,19 +111,27 @@
                         return { id: i + Date.now(), category: cat, name, isp };
                     }).filter(x => x !== null);
                     setMasterPrices(parsed);
+                    alert("Master harga diperbarui!");
                 };
                 reader.readAsText(file);
             };
 
             const handleLeadsUpload = (e) => {
                 const file = e.target.files[0];
+                if (!file) return;
                 const reader = new FileReader();
                 reader.onload = (ev) => {
-                    const lines = ev.target.result.split('\n').filter(l => l.trim());
-                    setLeads(lines.slice(1).map((line, i) => {
-                        const cols = line.split(/[;,]/).map(c => c.trim().replace(/"/g, ''));
-                        return { id: i, company: cols[0], address: cols[6] || '-', city: cols[9] || 'Luar Kota', phone: cols[12] || '-' };
+                    const rows = parseCSV(ev.target.result);
+                    // Sesuai file APJII: 0: Company, 6: Alamat, 9: Kota, 12: Phone
+                    const parsed = rows.slice(1).map((cols, i) => ({
+                        id: i, 
+                        company: cols[0]?.replace(/^"|"$/g, '') || 'N/A', 
+                        address: cols[6]?.replace(/^"|"$/g, '') || '-',
+                        city: cols[9]?.replace(/^"|"$/g, '') || 'Luar Kota', 
+                        phone: cols[12]?.replace(/^"|"$/g, '') || '-'
                     }));
+                    setLeads(parsed);
+                    setSelectedCity('Semua Kota');
                 };
                 reader.readAsText(file);
             };
@@ -113,37 +140,43 @@
                 const { jsPDF } = window.jspdf;
                 const doc = new jsPDF('p', 'mm', 'a4');
                 
-                // KOP SURAT
+                // --- KOP SURAT GMS ---
                 doc.setFillColor(0, 51, 153);
                 doc.rect(14, 12, 12, 12, 'F');
-                doc.setTextColor(255, 255, 255); doc.setFontSize(8); doc.text("GMS", 15.5, 20);
-                doc.setFontSize(18); doc.setTextColor(0, 51, 153); doc.setFont("helvetica", "bold");
-                doc.text("PT GLORI", 30, 18);
+                doc.setTextColor(255, 255, 255); doc.setFontSize(8); doc.setFont("helvetica", "bold");
+                doc.text("GMS", 15.5, 20);
+
+                doc.setFontSize(18); doc.setTextColor(0, 51, 153); doc.text("PT GLORI", 30, 18);
                 doc.setFontSize(10); doc.text("GMS MITRA SUKSES", 30, 23);
                 
-                const rightX = 196;
                 doc.setTextColor(100); doc.setFontSize(8); doc.setFont("helvetica", "normal");
-                doc.text("(021) 6505001", rightX, 15, { align: "right" });
-                doc.text(salesInfo.email, rightX, 19, { align: "right" });
-                doc.text("Komplek Ruko Artha Center I, Jakarta Barat", rightX, 23, { align: "right" });
+                doc.text("(021) 6505001", 196, 15, { align: "right" });
+                doc.text(salesInfo.email, 196, 19, { align: "right" });
+                doc.text("Komplek Ruko Artha Center I, Jakarta Barat", 196, 23, { align: "right" });
+
                 doc.setDrawColor(0, 51, 153); doc.setLineWidth(0.8); doc.line(14, 28, 196, 28);
                 doc.setLineWidth(0.2); doc.line(14, 29.5, 196, 29.5);
 
-                // PENERIMA
-                doc.setFontSize(11); doc.setTextColor(0); doc.setFont("helvetica", "bold");
+                // --- HEADER SURAT ---
+                doc.setFontSize(12); doc.setTextColor(0); doc.setFont("helvetica", "bold");
                 doc.text("SURAT PENAWARAN HARGA", 105, 42, { align: "center" });
+                
                 doc.setFontSize(9); doc.setFont("helvetica", "normal");
                 doc.text(`Tanggal: ${new Date().toLocaleDateString('id-ID', { day:'numeric', month:'long', year:'numeric' })}`, 14, 52);
                 doc.text("Kepada Yth:", 14, 62);
                 doc.setFont("helvetica", "bold"); doc.text(selectedLead.company, 14, 67);
-                doc.setFont("helvetica", "normal"); doc.text(`Alamat: ${selectedLead.address}, ${selectedLead.city}`, 14, 72, { maxWidth: 120 });
+                doc.setFont("helvetica", "normal"); 
+                doc.text(`Alamat: ${selectedLead.address}, ${selectedLead.city}`, 14, 72, { maxWidth: 120 });
                 doc.text(`Telp: ${selectedLead.phone}`, 14, 82);
+                
                 doc.text("Dengan hormat, bersama ini kami sampaikan penawaran harga eHose Fiber Cable sebagai berikut:", 14, 92);
 
-                // TABEL
-                const tableBody = quoteItems.map((item, i) => [
-                    i + 1, item.name, `${item.qty} Unit`, formatIDR(item.isp / 1.11), formatIDR((item.isp / 1.11) * item.qty)
-                ]);
+                // --- TABEL DATA ---
+                const tableBody = quoteItems.map((item, i) => {
+                    const priceBase = item.isp / 1.11;
+                    return [i + 1, item.name, `${item.qty} Unit`, formatIDR(priceBase), formatIDR(priceBase * item.qty)];
+                });
+
                 const totalWithTax = quoteItems.reduce((a, b) => a + (b.isp * b.qty), 0);
                 const subtotal = totalWithTax / 1.11;
                 const ppnValue = totalWithTax - subtotal;
@@ -153,23 +186,28 @@
                     head: [['No', 'Deskripsi Produk', 'Qty', 'Harga Dasar', 'Total']],
                     body: tableBody,
                     foot: [
-                        ['', '', '', 'SUBTOTAL', formatIDR(subtotal)],
+                        ['', '', '', 'SUBTOTAL (DPP)', formatIDR(subtotal)],
                         ['', '', '', 'PPN 11%', formatIDR(ppnValue)],
                         ['', '', '', 'GRAND TOTAL', formatIDR(totalWithTax)]
                     ],
-                    styles: { fontSize: 8, cellPadding: 3, font: "helvetica" },
+                    styles: { fontSize: 8, font: "helvetica", overflow: 'linebreak' },
                     headStyles: { fillColor: [0, 51, 153], halign: 'center' },
-                    columnStyles: { 0: { halign: 'center', cellWidth: 10 }, 2: { halign: 'center', cellWidth: 20 }, 3: { halign: 'right', cellWidth: 35 }, 4: { halign: 'right', cellWidth: 35 } },
+                    columnStyles: { 
+                        0: { halign: 'center', cellWidth: 10 },
+                        2: { halign: 'center', cellWidth: 20 },
+                        3: { halign: 'right', cellWidth: 35 },
+                        4: { halign: 'right', cellWidth: 35 }
+                    ],
                     footStyles: { fillColor: [245, 245, 245], textColor: [0], fontStyle: 'bold' },
                     theme: 'grid'
                 });
 
-                // TERBILANG
+                // --- TERBILANG ---
                 const finalY = doc.lastAutoTable.finalY + 10;
                 doc.setFont("helvetica", "italic"); doc.setFontSize(9);
                 doc.text(`Terbilang: ${terbilang(Math.round(totalWithTax))} Rupiah`, 14, finalY, { maxWidth: 180 });
 
-                // PENUTUP
+                // --- PENUTUP ---
                 doc.setFont("helvetica", "normal");
                 doc.text("Hormat kami,", 150, finalY + 15);
                 doc.setFont("helvetica", "bold"); doc.setTextColor(0, 51, 153);
@@ -185,82 +223,86 @@
             const filteredProducts = quoteItems.filter(item => item.name.toLowerCase().includes(productSearch.toLowerCase()));
 
             useEffect(() => {
-                if (isModalOpen) {
+                if (isModalOpen && selectedLead) {
                     const filtered = masterPrices.filter(p => selectedCategories.includes(p.category));
                     setQuoteItems(filtered.map(p => ({ ...p, qty: 1 })));
                 }
-            }, [selectedCategories, isModalOpen, masterPrices]);
+            }, [selectedCategories, isModalOpen, masterPrices, selectedLead]);
 
             return (
                 <div className="min-h-screen flex flex-col">
                     <header className="bg-white border-b-4 border-blue-600 p-4 shadow-sm flex justify-between items-center sticky top-0 z-50">
                         <div className="flex items-center gap-3">
                             <div className="bg-blue-600 p-2 rounded-xl text-white shadow-lg"><i data-lucide="building-2"></i></div>
-                            <h1 className="font-black text-slate-800 uppercase text-xs md:text-sm">{salesInfo.company}</h1>
+                            <h1 className="font-black text-slate-800 uppercase text-xs md:text-sm tracking-tighter">PT GLORI GMS</h1>
                         </div>
                         <nav className="flex bg-slate-100 p-1 rounded-xl">
-                            <button onClick={() => setActiveTab('dashboard')} className={`px-4 py-2 rounded-lg text-[10px] font-black ${activeTab === 'dashboard' ? 'bg-white shadow text-blue-600' : 'text-slate-400'}`}>DASHBOARD</button>
-                            <button onClick={() => setActiveTab('manage')} className={`px-4 py-2 rounded-lg text-[10px] font-black ${activeTab === 'manage' ? 'bg-white shadow text-blue-600' : 'text-slate-400'}`}>LIST HARGA</button>
+                            <button onClick={() => setActiveTab('dashboard')} className={`px-4 py-2 rounded-lg text-[10px] font-black transition-all ${activeTab === 'dashboard' ? 'bg-white shadow text-blue-600' : 'text-slate-400'}`}>DASHBOARD</button>
+                            <button onClick={() => setActiveTab('manage')} className={`px-4 py-2 rounded-lg text-[10px] font-black transition-all ${activeTab === 'manage' ? 'bg-white shadow text-blue-600' : 'text-slate-400'}`}>LIST HARGA</button>
                         </nav>
                     </header>
 
                     <main className="max-w-7xl w-full mx-auto p-6 flex-1">
                         {activeTab === 'manage' ? (
-                            <div className="space-y-6">
-                                <div className="bg-slate-900 p-8 rounded-[2rem] text-white flex justify-between items-center shadow-2xl relative overflow-hidden">
+                            <div className="space-y-6 animate-in fade-in">
+                                <div className="bg-slate-900 p-8 rounded-[2rem] text-white flex justify-between items-center relative overflow-hidden shadow-2xl">
                                     <div className="z-10">
-                                        <h3 className="text-xl font-black mb-1">Update Master Harga</h3>
-                                        <label className="bg-blue-600 px-6 py-3 rounded-xl text-[10px] font-black cursor-pointer inline-block mt-4 hover:bg-blue-700 transition-all">
+                                        <h3 className="text-xl font-black mb-1">Master Harga</h3>
+                                        <label className="bg-blue-600 px-6 py-3 rounded-xl text-[10px] font-black cursor-pointer inline-block mt-4 hover:scale-105 transition-all">
                                             UPLOAD CSV HARGA <input type="file" className="hidden" accept=".csv" onChange={handlePriceUpload} />
                                         </label>
                                     </div>
-                                    <i data-lucide="database" className="opacity-10 absolute -right-4 -bottom-4" size={100}></i>
+                                    <i data-lucide="database" className="opacity-10 absolute -right-4 -bottom-4" size={120}></i>
                                 </div>
                                 <div className="bg-white rounded-[2rem] shadow-sm border overflow-hidden">
-                                    <table className="w-full text-left"><thead className="bg-slate-50 border-b text-[10px] font-black text-slate-400 uppercase tracking-widest"><tr><th className="p-6">Produk</th><th className="p-6 text-right">Harga (Inc PPN)</th></tr></thead>
-                                    <tbody className="divide-y">{masterPrices.map(item => (<tr key={item.id} className="hover:bg-slate-50"><td className="p-6 text-xs font-bold text-slate-700">{item.name}</td><td className="p-6 text-right font-black text-blue-600 text-sm">{formatIDR(item.isp)}</td></tr>))}</tbody></table>
+                                    <table className="w-full text-left">
+                                        <thead className="bg-slate-50 border-b text-[10px] font-black text-slate-400 uppercase tracking-widest"><tr><th className="p-6">Produk</th><th className="p-6 text-right">Harga (Inc PPN)</th></tr></thead>
+                                        <tbody className="divide-y">{masterPrices.map(item => (<tr key={item.id} className="hover:bg-slate-50 transition-colors"><td className="p-6 text-xs font-bold text-slate-700">{item.name}</td><td className="p-6 text-right font-black text-blue-600 text-sm">{formatIDR(item.isp)}</td></tr>))}</tbody>
+                                    </table>
                                 </div>
                             </div>
                         ) : (
-                            <div className="space-y-6">
-                                <div className="bg-blue-600 p-8 rounded-[2.5rem] text-white flex justify-between items-center shadow-xl">
-                                    <div><h2 className="text-2xl font-black mb-4 tracking-tight leading-none">Portal Penawaran</h2>
-                                    <label className="bg-white text-blue-600 px-6 py-3 rounded-xl text-[10px] font-black cursor-pointer inline-block">
+                            <div className="space-y-6 animate-in fade-in">
+                                <div className="bg-blue-600 p-8 rounded-[3rem] text-white flex justify-between items-center shadow-xl">
+                                    <div><h2 className="text-2xl font-black mb-4 tracking-tight leading-none">Database APJII</h2>
+                                    <label className="bg-white text-blue-600 px-6 py-3 rounded-xl text-[10px] font-black cursor-pointer inline-block shadow-lg hover:scale-105 transition-all">
                                         IMPORT DATA APJII <input type="file" className="hidden" accept=".csv" onChange={handleLeadsUpload} />
                                     </label></div>
-                                    <i data-lucide="users" className="opacity-20" size={80}></i>
+                                    <i data-lucide="users" className="opacity-20" size={100}></i>
                                 </div>
-                                <div className="flex flex-col md:flex-row gap-4 bg-white p-5 rounded-[2.2rem] border shadow-sm">
+                                <div className="flex flex-col md:flex-row gap-4 bg-white p-5 rounded-[2.5rem] border shadow-sm">
                                     <div className="relative flex-1"><i data-lucide="search" className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18}></i>
-                                    <input type="text" placeholder="Cari Nama Perusahaan..." className="w-full pl-12 pr-6 py-3.5 bg-slate-50 rounded-2xl text-sm font-bold outline-none" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div>
-                                    <select className="bg-slate-50 px-6 py-3.5 rounded-2xl text-sm font-bold outline-none cursor-pointer" value={selectedCity} onChange={(e) => setSelectedCity(e.target.value)}>{cityOptions.map(c => <option key={c} value={c}>{c}</option>)}</select>
+                                    <input type="text" placeholder="Cari Nama Perusahaan..." className="w-full pl-12 pr-6 py-3.5 bg-slate-50 rounded-2xl text-sm font-bold outline-none focus:ring-4 focus:ring-blue-500/10" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div>
+                                    <select className="bg-slate-50 px-6 py-3.5 rounded-2xl text-sm font-bold outline-none cursor-pointer focus:ring-4 focus:ring-blue-500/10 border-none" value={selectedCity} onChange={(e) => setSelectedCity(e.target.value)}>{cityOptions.map(c => <option key={c} value={c}>{c}</option>)}</select>
                                 </div>
                                 <div className="bg-white rounded-[2.5rem] shadow-sm border overflow-hidden">
-                                    <table className="w-full text-left"><thead className="bg-slate-50 border-b text-[10px] font-black text-slate-400 uppercase tracking-widest"><tr><th className="p-6">Nama Perusahaan</th><th className="p-6">Regional</th><th className="p-6 text-right">Aksi</th></tr></thead>
-                                    <tbody className="divide-y">{filteredLeads.map(lead => (<tr key={lead.id} className="hover:bg-slate-50"><td className="p-6 font-bold text-sm text-slate-800">{lead.company}</td><td className="p-6 text-[10px] font-bold text-slate-500 uppercase">{lead.city}</td><td className="p-6 text-right"><button onClick={() => { setSelectedLead(lead); setIsModalOpen(true); }} className="bg-slate-900 text-white px-6 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-blue-600 transition-all">Penawaran</button></td></tr>))}</tbody></table>
+                                    <table className="w-full text-left">
+                                        <thead className="bg-slate-50 border-b text-[10px] font-black text-slate-400 uppercase tracking-widest"><tr><th className="p-6">Nama Perusahaan</th><th className="p-6">Kota</th><th className="p-6 text-right">Aksi</th></tr></thead>
+                                        <tbody className="divide-y">{filteredLeads.map(lead => (<tr key={lead.id} className="hover:bg-blue-50/50 transition-colors"><td className="p-6 font-bold text-sm text-slate-800">{lead.company}</td><td className="p-6 text-[10px] text-slate-500 font-bold uppercase"><span className="flex items-center gap-1"><i data-lucide="map-pin" size={12}></i> {lead.city}</span></td><td className="p-6 text-right"><button onClick={() => { setSelectedLead(lead); setIsModalOpen(true); }} className="bg-slate-900 text-white px-6 py-2.5 rounded-xl text-[10px] font-black uppercase hover:bg-blue-600 transition-all shadow-md">Penawaran</button></td></tr>))}</tbody>
+                                    </table>
                                 </div>
                             </div>
                         )}
                     </main>
 
                     {isModalOpen && selectedLead && (
-                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm">
-                            <div className="bg-white w-full max-w-5xl rounded-[3.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[95vh]">
+                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 modal-blur">
+                            <div className="bg-white w-full max-w-5xl rounded-[3.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in duration-300">
                                 <div className="p-6 bg-blue-600 text-white flex justify-between items-center">
-                                    <h2 className="font-black text-sm uppercase">{selectedLead.company}</h2>
+                                    <div><h2 className="font-black text-sm uppercase tracking-tight">{selectedLead.company}</h2><p className="text-[10px] font-bold opacity-70 uppercase">{selectedLead.city}</p></div>
                                     <button onClick={() => setIsModalOpen(false)} className="bg-white/20 p-2 rounded-xl hover:bg-white/40 font-black text-[10px] uppercase">Tutup</button>
                                 </div>
                                 <div className="p-8 flex flex-col md:flex-row gap-8 overflow-hidden">
-                                    <div className="md:w-64 space-y-6 shrink-0">
-                                        <div><p className="text-[10px] font-black text-slate-400 uppercase mb-3 tracking-widest">Cari Produk</p>
-                                        <input type="text" placeholder="Ketik nama kabel..." className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold outline-none focus:border-blue-500" value={productSearch} onChange={(e) => setProductSearch(e.target.value)} /></div>
+                                    <div className="md:w-64 space-y-6 shrink-0 overflow-y-auto custom-scroll pr-2">
+                                        <div><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Cari Produk</p>
+                                        <input type="text" placeholder="Ketik nama kabel..." className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold outline-none" value={productSearch} onChange={(e) => setProductSearch(e.target.value)} /></div>
                                         <div><p className="text-[10px] font-black text-slate-400 uppercase mb-3 tracking-widest">Kategori</p>
-                                        <div className="flex flex-wrap gap-2">{categories.map(cat => (<button key={cat} onClick={() => setSelectedCategories(prev => prev.includes(cat) ? (prev.length > 1 ? prev.filter(c => c !== cat) : prev) : [...prev, cat])} className={`px-4 py-2 rounded-xl text-[9px] font-black border-2 transition-all ${selectedCategories.includes(cat) ? 'bg-blue-600 border-blue-600 text-white shadow-md' : 'bg-white border-slate-100 text-slate-400'}`}>{cat}</button>))}</div></div>
+                                        <div className="flex flex-wrap gap-2">{categories.map(cat => (<button key={cat} onClick={() => setSelectedCategories(prev => prev.includes(cat) ? (prev.length > 1 ? prev.filter(c => c !== cat) : prev) : [...prev, cat])} className={`px-4 py-2 rounded-xl text-[9px] font-black border-2 transition-all ${selectedCategories.includes(cat) ? 'bg-blue-600 border-blue-600 text-white shadow-lg' : 'bg-white border-slate-100 text-slate-400 hover:border-blue-200'}`}>{cat}</button>))}</div></div>
                                     </div>
                                     <div className="flex-1 flex flex-col overflow-hidden">
                                         <div className="flex-1 overflow-y-auto custom-scroll space-y-3 pr-2">
                                             {filteredProducts.map(item => (
-                                                <div key={item.id} className="p-4 bg-slate-50 rounded-2xl border flex justify-between items-center hover:border-blue-200 transition-all">
+                                                <div key={item.id} className="p-4 bg-slate-50 rounded-2xl border flex justify-between items-center hover:border-blue-200 transition-all group">
                                                     <div className="flex-1 pr-4"><p className="text-[11px] font-bold text-slate-700 leading-tight mb-1">{item.name}</p><p className="text-[10px] font-black text-blue-500 uppercase mt-1">{formatIDR(item.isp)}</p></div>
                                                     <div className="flex items-center gap-4">
                                                         <div className="flex items-center bg-white p-1 rounded-xl shadow-sm border">
@@ -272,12 +314,10 @@
                                                     </div>
                                                 </div>
                                             ))}
+                                            {filteredProducts.length === 0 && <div className="p-10 text-center text-slate-400 italic text-xs">Pilih kategori untuk menampilkan produk.</div>}
                                         </div>
                                         <div className="mt-6 p-8 bg-blue-50 rounded-[3rem] border border-blue-100 flex flex-col md:flex-row justify-between items-center gap-6 shadow-inner">
-                                            <div className="text-center md:text-left">
-                                                <p className="text-[10px] font-black text-blue-400 uppercase mb-1">Grand Total (Inc. PPN 11%)</p>
-                                                <h3 className="text-2xl font-black text-blue-700 leading-none">{formatIDR(quoteItems.reduce((a, b) => a + (b.isp * b.qty), 0))}</h3>
-                                            </div>
+                                            <div className="text-center md:text-left"><p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">Grand Total (Inc. PPN 11%)</p><h3 className="text-3xl font-black text-blue-700 leading-none">{formatIDR(quoteItems.reduce((a, b) => a + (b.isp * b.qty), 0))}</h3></div>
                                             <button onClick={downloadPDF} className="bg-blue-600 text-white px-10 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-blue-200 hover:scale-105 active:scale-95 transition-all">UNDUH PDF PENAWARAN</button>
                                         </div>
                                     </div>
