@@ -3,33 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Penawaran eHose Fiber - PT. Glori Mitra Sukses</title>
+    <title>Penawaran eHose - PT. Glori Mitra Sukses</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
-    
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-    <script src="https://unpkg.com/lucide@latest"></script>
-
     <style>
-        [id="root"]:empty {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            font-family: sans-serif;
-            background: #f8fafc;
-        }
-        [id="root"]:empty::after {
-            content: "Menyiapkan Sistem Penawaran...";
-            font-weight: bold;
-            color: #2563eb;
-        }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .glass-card { background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(10px); }
     </style>
 </head>
-<body>
+<body class="bg-slate-50">
     <div id="root"></div>
 
     <script type="text/babel">
@@ -39,40 +26,23 @@
             const [activeTab, setActiveTab] = useState('dashboard');
             const [data, setData] = useState([]); 
             const [searchTerm, setSearchTerm] = useState('');
-            const [selectedCity, setSelectedCity] = useState('Semua Kota');
             const [selectedLead, setSelectedLead] = useState(null);
             const [isModalOpen, setIsModalOpen] = useState(false);
             
             const salesName = 'Kherisno';
             const companyName = 'PT. Glori Mitra Sukses';
 
-            // Master Data Awal
-            const [masterPrices] = useState([
-                { id: 1, category: "ADSS", name: "CABLE ADSS 288 CORE 4 KM", isp: 180000000 },
-                { id: 3, category: "Drop Core", name: "FTTH DROP CABLE 1 KM", isp: 650000 }
-            ]);
+            // Master Data
+            const masterPrices = [
+                { category: "ADSS", name: "CABLE ADSS 288 CORE 4 KM", price: 180000000 },
+                { category: "Drop Core", name: "FTTH DROP CABLE 1 KM", price: 650000 }
+            ];
 
-            const [quoteConfig, setQuoteConfig] = useState({
-                selectedCategories: ['ADSS']
-            });
+            const formatIDR = (val) => new Intl.NumberFormat('id-ID', { 
+                style: 'currency', currency: 'IDR', maximumFractionDigits: 0 
+            }).format(val);
 
-            // Fungsi untuk menjalankan icon lucide setelah render
-            useEffect(() => {
-                if (window.lucide) {
-                    window.lucide.createIcons();
-                }
-            });
-
-            const cities = useMemo(() => ['Semua Kota', ...Array.from(new Set(data.map(d => d.city))).sort()], [data]);
-            
-            const filteredLeads = useMemo(() => data.filter(item => {
-                const name = item.company || '';
-                return name.toLowerCase().includes(searchTerm.toLowerCase()) && 
-                       (selectedCity === 'Semua Kota' || item.city === selectedCity);
-            }), [data, searchTerm, selectedCity]);
-
-            const formatIDR = (val) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(val);
-
+            // Handler Upload CSV
             const handleUpload = (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
@@ -81,96 +51,147 @@
                     const lines = ev.target.result.split('\n').filter(l => l.trim());
                     const parsed = lines.slice(1).map((line, i) => {
                         const cols = line.split(/[;,]/).map(c => c.trim().replace(/"/g, ''));
-                        return { id: i, company: cols[0], city: cols[9] || 'Luar Kota' };
+                        return { id: i, company: cols[0] || 'N/A', city: cols[9] || 'Luar Kota' };
                     });
                     setData(parsed);
                 };
                 reader.readAsText(file);
             };
 
+            const filteredLeads = data.filter(item => 
+                item.company.toLowerCase().includes(searchTerm.toLowerCase())
+            );
+
             return (
-                <div className="min-h-screen bg-slate-50 text-slate-900 pb-10">
-                    <header className="bg-white border-b-4 border-blue-600 p-4 shadow-md flex justify-between items-center sticky top-0 z-50">
-                        <div className="flex items-center gap-3">
-                            <div className="bg-blue-600 p-2 rounded-lg text-white">
-                                <i data-lucide="building-2"></i>
+                <div className="min-h-screen flex flex-col">
+                    {/* Header */}
+                    <header class="bg-white border-b border-slate-200 sticky top-0 z-50 px-6 py-4 flex justify-between items-center shadow-sm">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white font-bold">G</div>
+                            <div>
+                                <h1 class="font-black text-slate-800 leading-none">{companyName}</h1>
+                                <p class="text-[10px] text-blue-500 font-bold mt-1 tracking-widest uppercase">Sales Portal</p>
                             </div>
-                            <h1 className="font-black text-lg uppercase">{companyName}</h1>
                         </div>
-                        <div className="flex gap-2">
-                            <button onClick={() => setActiveTab('dashboard')} className={`px-4 py-2 rounded-xl text-xs font-bold ${activeTab === 'dashboard' ? 'bg-blue-600 text-white' : 'bg-slate-100'}`}>DASHBOARD</button>
-                            <button onClick={() => setActiveTab('harga')} className={`px-4 py-2 rounded-xl text-xs font-bold ${activeTab === 'harga' ? 'bg-blue-600 text-white' : 'bg-slate-100'}`}>LIST HARGA</button>
-                        </div>
+                        <nav class="flex bg-slate-100 p-1 rounded-xl">
+                            <button onClick={() => setActiveTab('dashboard')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'dashboard' ? 'bg-white shadow text-blue-600' : 'text-slate-500'}`}>BERANDA</button>
+                            <button onClick={() => setActiveTab('harga')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'harga' ? 'bg-white shadow text-blue-600' : 'text-slate-500'}`}>LIST HARGA</button>
+                        </nav>
                     </header>
 
-                    <main className="max-w-6xl mx-auto p-6">
-                        <div className="bg-gradient-to-r from-blue-700 to-indigo-800 p-8 rounded-3xl text-white mb-8 shadow-xl">
-                            <h2 className="text-2xl font-black mb-2">Halo, {salesName}</h2>
-                            <p className="text-blue-100 text-sm mb-6">Import database pelanggan (CSV) untuk membuat penawaran otomatis.</p>
-                            <label className="bg-white text-blue-700 px-6 py-3 rounded-2xl font-black text-sm cursor-pointer shadow-lg hover:bg-blue-50 transition-colors">
-                                UPLOAD DATA CSV <input type="file" className="hidden" accept=".csv" onChange={handleUpload} />
-                            </label>
-                        </div>
-
-                        <div className="flex gap-4 mb-6">
-                            <input 
-                                type="text" 
-                                placeholder="Cari nama perusahaan..." 
-                                className="flex-1 p-4 rounded-2xl border-none shadow-sm outline-none focus:ring-2 focus:ring-blue-500"
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                            />
-                            <select className="p-4 rounded-2xl bg-white shadow-sm font-bold text-sm outline-none" onChange={(e) => setSelectedCity(e.target.value)}>
-                                {cities.map(c => <option key={c} value={c}>{c}</option>)}
-                            </select>
-                        </div>
-
-                        <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
-                            <table className="w-full text-left">
-                                <thead className="bg-slate-50 text-[10px] font-black uppercase text-slate-400">
-                                    <tr>
-                                        <th className="p-6">Nama Perusahaan</th>
-                                        <th className="p-6">Wilayah</th>
-                                        <th className="p-6 text-right">Aksi</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-100">
-                                    {filteredLeads.map(lead => (
-                                        <tr key={lead.id} className="hover:bg-blue-50/50">
-                                            <td className="p-6 font-bold">{lead.company}</td>
-                                            <td className="p-6 text-sm text-slate-500">{lead.city}</td>
-                                            <td className="p-6 text-right">
-                                                <button onClick={() => { setSelectedLead(lead); setIsModalOpen(true); }} className="bg-slate-900 text-white px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-600 transition-colors">Penawaran</button>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                    {filteredLeads.length === 0 && (
-                                        <tr><td colSpan="3" className="p-10 text-center text-slate-400 italic text-sm">Belum ada data. Silakan upload file CSV.</td></tr>
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
-                    </main>
-
-                    {isModalOpen && selectedLead && (
-                        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-                            <div className="bg-white w-full max-w-lg rounded-[2.5rem] p-8 shadow-2xl relative">
-                                <button onClick={() => setIsModalOpen(false)} className="absolute right-6 top-6 text-slate-300 hover:text-slate-600">
-                                    <i data-lucide="x"></i>
-                                </button>
-                                <h2 className="text-xl font-black mb-1">{selectedLead.company}</h2>
-                                <p className="text-xs text-slate-400 mb-8 uppercase tracking-widest">{selectedLead.city}</p>
-                                
-                                <div className="bg-blue-50 p-6 rounded-3xl mb-8">
-                                    <p className="text-[10px] font-black text-blue-400 uppercase mb-2">Estimasi Total (Inc. PPN 11%)</p>
-                                    <p className="text-3xl font-black text-blue-700">{formatIDR(180000000)}</p>
+                    <main class="flex-1 max-w-6xl w-full mx-auto p-6">
+                        {activeTab === 'dashboard' ? (
+                            <div class="space-y-6">
+                                {/* Hero Section */}
+                                <div class="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-[2rem] p-8 text-white shadow-xl flex justify-between items-center">
+                                    <div>
+                                        <h2 class="text-3xl font-black mb-2">Selamat Datang, {salesName}</h2>
+                                        <p class="text-blue-100 mb-6 max-w-md">Siapkan penawaran harga kabel fiber optik eHose dengan cepat dan profesional.</p>
+                                        <label class="bg-white text-blue-600 px-6 py-3 rounded-xl font-black text-sm cursor-pointer hover:bg-blue-50 transition-all inline-block shadow-lg">
+                                            UPLOAD DATABASE CSV
+                                            <input type="file" class="hidden" accept=".csv" onChange={handleUpload} />
+                                        </label>
+                                    </div>
+                                    <div class="hidden md:block opacity-20 text-[100px] font-black italic select-none">eHOSE</div>
                                 </div>
 
-                                <button onClick={() => alert('PDF sedang diproses...')} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black text-sm shadow-xl shadow-blue-100 hover:scale-[1.02] transition-transform">
-                                    UNDUH SURAT PENAWARAN
+                                {/* Search Bar */}
+                                <div class="relative">
+                                    <input 
+                                        type="text" 
+                                        placeholder="Cari nama perusahaan pelanggan..." 
+                                        class="w-full p-5 rounded-2xl border-none shadow-sm focus:ring-2 focus:ring-blue-500 outline-none text-slate-700 font-medium"
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                    />
+                                </div>
+
+                                {/* Table Section */}
+                                <div class="bg-white rounded-[2rem] shadow-sm border border-slate-100 overflow-hidden">
+                                    <table class="w-full text-left">
+                                        <thead class="bg-slate-50/50 border-b border-slate-100">
+                                            <tr>
+                                                <th class="p-6 text-[10px] font-black text-slate-400 uppercase">Nama Perusahaan</th>
+                                                <th class="p-6 text-[10px] font-black text-slate-400 uppercase">Wilayah</th>
+                                                <th class="p-6 text-right text-[10px] font-black text-slate-400 uppercase">Aksi</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="divide-y divide-slate-50">
+                                            {filteredLeads.length > 0 ? filteredLeads.map(lead => (
+                                                <tr key={lead.id} class="hover:bg-blue-50/30 transition-colors">
+                                                    <td class="p-6 font-bold text-slate-800">{lead.company}</td>
+                                                    <td class="p-6 text-sm text-slate-500 font-medium">{lead.city}</td>
+                                                    <td class="p-6 text-right">
+                                                        <button 
+                                                            onClick={() => { setSelectedLead(lead); setIsModalOpen(true); }}
+                                                            class="bg-blue-600 text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase hover:bg-blue-700 shadow-md shadow-blue-100 transition-all"
+                                                        >
+                                                            PENAWARAN
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            )) : (
+                                                <tr>
+                                                    <td colspan="3" class="p-20 text-center text-slate-400 font-medium italic">
+                                                        Belum ada data. Silakan upload file CSV hasil download APJII.
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        ) : (
+                            <div class="bg-white p-20 rounded-[2.5rem] text-center border-2 border-dashed border-slate-200">
+                                <h3 class="font-black text-slate-300 text-4xl mb-4">MODUL HARGA</h3>
+                                <p class="text-slate-400 font-medium">Data harga sedang disinkronisasi dengan pusat.</p>
+                            </div>
+                        )}
+                    </main>
+
+                    {/* MODAL PENAWARAN */}
+                    {isModalOpen && selectedLead && (
+                        <div class="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                            <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm shadow-2xl" onClick={() => setIsModalOpen(false)}></div>
+                            <div class="relative bg-white w-full max-w-lg rounded-[3rem] p-10 shadow-2xl animate-in fade-in zoom-in duration-200">
+                                <div class="flex justify-between items-start mb-6">
+                                    <div>
+                                        <h2 class="text-2xl font-black text-slate-800 tracking-tight leading-tight">{selectedLead.company}</h2>
+                                        <p class="text-blue-500 font-bold text-xs uppercase mt-1">{selectedLead.city}</p>
+                                    </div>
+                                    <button onClick={() => setIsModalOpen(false)} class="text-slate-300 hover:text-slate-600 transition-colors font-bold">TUTUP</button>
+                                </div>
+
+                                <div class="bg-slate-50 border border-slate-100 rounded-3xl p-6 mb-8">
+                                    <p class="text-[10px] font-black text-slate-400 uppercase mb-4 tracking-widest">Ringkasan Penawaran</p>
+                                    <div class="space-y-3">
+                                        <div class="flex justify-between text-sm">
+                                            <span class="text-slate-500">Produk Terpilih:</span>
+                                            <span class="font-bold text-slate-800">CABLE ADSS 288 CORE</span>
+                                        </div>
+                                        <div class="flex justify-between text-sm">
+                                            <span class="text-slate-500">Pajak:</span>
+                                            <span class="font-bold text-slate-800">PPN 11% (Included)</span>
+                                        </div>
+                                        <div class="pt-4 border-t border-slate-200 flex justify-between items-center">
+                                            <span class="text-xs font-black text-slate-400 uppercase">Total Akhir</span>
+                                            <span class="text-2xl font-black text-blue-600">{formatIDR(180000000)}</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <button 
+                                    onClick={() => alert('PDF Penawaran berhasil dibuat! Periksa folder Download Anda.')} 
+                                    class="w-full bg-blue-600 text-white py-5 rounded-2xl font-black text-sm shadow-xl shadow-blue-200 hover:bg-blue-700 hover:scale-[1.02] transition-all uppercase tracking-widest"
+                                >
+                                    UNDUH PDF PENAWARAN
                                 </button>
                             </div>
                         </div>
                     )}
+
+                    <footer class="p-6 text-center text-slate-300 text-[10px] font-bold uppercase tracking-[0.2em]">
+                        &copy; 2026 {companyName} — Official Dealer eHose Fiber
+                    </footer>
                 </div>
             );
         };
