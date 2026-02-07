@@ -34,19 +34,15 @@
             const [isModalOpen, setIsModalOpen] = useState(false);
             const [selectedLead, setSelectedLead] = useState(null);
 
-            // Informasi Sales Tetap
             const salesInfo = {
                 name: 'Kherisno',
                 email: 'sales@glori.id',
                 whatsapp: '081314271921',
-                company: 'PT. Glori Mitra Sukses'
+                company: 'PT GLORI',
+                subCompany: 'GMS MITRA SUKSES'
             };
 
-            const [masterPrices, setMasterPrices] = useState([
-                { id: 1, category: "ADSS", name: "FIBER OPTIC CABLE ADSS 288 CORE (24 TUBE) 4 KM", isp: 180000000 },
-                { id: 2, category: "ADSS", name: "FIBER OPTIC CABLE ADSS 144 CORE (12 TUBE) 4 KM", isp: 90000000 }
-            ]);
-
+            const [masterPrices, setMasterPrices] = useState([]);
             const [quoteItems, setQuoteItems] = useState([]);
             const [selectedCategories, setSelectedCategories] = useState(['ADSS']);
             const categories = ["ADSS", "Drop Core", "ODP/ODF", "Armored", "Mini ADSS", "Lainnya"];
@@ -57,7 +53,6 @@
                 style: 'currency', currency: 'IDR', maximumFractionDigits: 0 
             }).format(val);
 
-            // Parser CSV List Harga
             const handlePriceUpload = (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
@@ -67,8 +62,8 @@
                     const parsed = lines.slice(1).map((line, i) => {
                         const cols = line.match(/(".*?"|[^,]+)(?=\s*,|\s*$)/g)?.map(c => c.trim().replace(/"/g, '')) || [];
                         if (cols.length < 2) return null;
-                        const rawVal = cols[1].split('.')[0].replace(/[^\d]/g, '');
-                        const isp = parseInt(rawVal) || 0;
+                        const cleanVal = cols[1].split('.')[0].replace(/[^\d]/g, '');
+                        const isp = parseInt(cleanVal) || 0;
                         const name = cols[0];
                         let cat = "Lainnya";
                         const ln = name.toLowerCase();
@@ -78,11 +73,11 @@
                         return { id: i + Date.now(), category: cat, name, isp };
                     }).filter(x => x !== null);
                     setMasterPrices(parsed);
+                    alert("List harga diperbarui!");
                 };
                 reader.readAsText(file);
             };
 
-            // Parser CSV Pelanggan (Leads)
             const handleLeadsUpload = (e) => {
                 const file = e.target.files[0];
                 const reader = new FileReader();
@@ -91,12 +86,8 @@
                     setLeads(lines.slice(1).map((line, i) => {
                         const cols = line.split(/[;,]/).map(c => c.trim().replace(/"/g, ''));
                         return { 
-                            id: i, 
-                            company: cols[0], 
-                            brand: cols[2] || '-',
-                            address: cols[6] || 'Alamat tidak tersedia',
-                            city: cols[9] || 'Luar Kota',
-                            phone: cols[12] || '-'
+                            id: i, company: cols[0], address: cols[6] || '-',
+                            city: cols[9] || 'Luar Kota', phone: cols[12] || '-'
                         };
                     }));
                 };
@@ -107,49 +98,70 @@
                 const { jsPDF } = window.jspdf;
                 const doc = new jsPDF();
                 
-                // Kop Surat
+                // --- KOP SURAT ---
+                doc.setFillColor(0, 51, 153);
+                doc.rect(14, 12, 12, 12, 'F');
+                doc.setTextColor(255, 255, 255); doc.setFontSize(8); doc.text("GMS", 15.5, 20);
+
                 doc.setFontSize(18); doc.setTextColor(0, 51, 153); doc.setFont("helvetica", "bold");
-                doc.text(salesInfo.company, 14, 20);
+                doc.text(salesInfo.company, 30, 18);
+                doc.setFontSize(10); doc.text(salesInfo.subCompany, 30, 23);
                 
-                doc.setDrawColor(0, 51, 153); doc.setLineWidth(0.5); doc.line(14, 25, 196, 25);
+                doc.setTextColor(100); doc.setFontSize(8); doc.setFont("helvetica", "normal");
+                const rightX = 196;
+                doc.text("(021) 6505001", rightX, 15, { align: "right" });
+                doc.text("sales@glori.id", rightX, 19, { align: "right" });
+                doc.text("Komplek Ruko Artha Center I, Jakarta Barat", rightX, 23, { align: "right" });
 
-                // Informasi Penawaran & Customer
-                doc.setFontSize(10); doc.setTextColor(0); doc.setFont("helvetica", "bold");
-                doc.text("SURAT PENAWARAN HARGA", 105, 35, { align: "center" });
+                doc.setDrawColor(0, 51, 153); doc.setLineWidth(0.8); doc.line(14, 28, 196, 28);
+                doc.setLineWidth(0.2); doc.line(14, 29.5, 196, 29.5);
+
+                // --- DETAIL SURAT ---
+                doc.setFontSize(12); doc.setTextColor(0); doc.setFont("helvetica", "bold");
+                doc.text("SURAT PENAWARAN HARGA", 105, 42, { align: "center" });
                 
-                doc.setFont("helvetica", "normal");
-                doc.text(`Tanggal: ${new Date().toLocaleDateString('id-ID', { day:'numeric', month:'long', year:'numeric' })}`, 14, 45);
-                doc.text(`Kepada Yth:`, 14, 55);
-                doc.setFont("helvetica", "bold");
-                doc.text(selectedLead.company, 14, 60);
-                doc.setFont("helvetica", "normal");
-                doc.text(`Alamat: ${selectedLead.address}, ${selectedLead.city}`, 14, 65, { maxWidth: 100 });
-                doc.text(`Telp: ${selectedLead.phone}`, 14, 75);
+                doc.setFontSize(9); doc.setFont("helvetica", "normal");
+                doc.text(`Tanggal: ${new Date().toLocaleDateString('id-ID', { day:'numeric', month:'long', year:'numeric' })}`, 14, 52);
+                doc.text("Kepada Yth:", 14, 62);
+                doc.setFont("helvetica", "bold"); doc.text(selectedLead.company, 14, 67);
+                doc.setFont("helvetica", "normal"); 
+                doc.text(`Alamat: ${selectedLead.address}, ${selectedLead.city}`, 14, 72, { maxWidth: 120 });
+                doc.text(`Telp: ${selectedLead.phone}`, 14, 80);
 
-                // Tabel
-                const tableBody = quoteItems.map((item, i) => [
-                    i + 1, item.name, `${item.qty} Unit`, formatIDR(item.isp), formatIDR(item.isp * item.qty)
-                ]);
+                // --- KALIMAT PENGANTAR ---
+                doc.text("Dengan hormat, bersama ini kami sampaikan penawaran harga eHose Fiber Cable sebagai berikut:", 14, 90);
+
+                // --- TABEL PENAWARAN ---
+                const tableBody = quoteItems.map((item, i) => {
+                    const basePrice = item.isp / 1.11;
+                    return [i + 1, item.name, `${item.qty} Unit`, formatIDR(basePrice), formatIDR(basePrice * item.qty)];
+                });
+
+                const totalWithTax = quoteItems.reduce((a, b) => a + (b.isp * b.qty), 0);
+                const subtotal = totalWithTax / 1.11;
+                const ppnValue = totalWithTax - subtotal;
 
                 doc.autoTable({
-                    startY: 85,
-                    head: [['No', 'Deskripsi Produk', 'Qty', 'Harga Satuan', 'Total']],
+                    startY: 95,
+                    head: [['No', 'Deskripsi Produk', 'Qty', 'Harga Dasar', 'Total']],
                     body: tableBody,
-                    foot: [['', '', '', 'GRAND TOTAL (INC PPN 11%)', formatIDR(totalAmount)]],
+                    foot: [
+                        ['', '', '', 'SUBTOTAL', formatIDR(subtotal)],
+                        ['', '', '', 'PPN 11%', formatIDR(ppnValue)],
+                        ['', '', '', 'GRAND TOTAL', formatIDR(totalWithTax)]
+                    ],
                     headStyles: { fillColor: [0, 51, 153] },
-                    footStyles: { fillColor: [240, 240, 240], textColor: [0], fontStyle: 'bold' },
+                    footStyles: { fillColor: [245, 245, 245], textColor: [0], fontStyle: 'bold' },
                     theme: 'grid'
                 });
 
-                // Penutup & Tanda Tangan
+                // --- PENUTUP ---
                 const finalY = doc.lastAutoTable.finalY + 20;
                 doc.text("Hormat kami,", 150, finalY);
-                doc.setFont("helvetica", "bold");
-                doc.setTextColor(0, 51, 153);
+                doc.setFont("helvetica", "bold"); doc.setTextColor(0, 51, 153);
                 doc.text(salesInfo.name, 150, finalY + 20);
-                doc.setFont("helvetica", "normal"); doc.setTextColor(0); doc.setFontSize(9);
-                doc.text(`Email: ${salesInfo.email}`, 150, finalY + 25);
-                doc.text(`WhatsApp: ${salesInfo.whatsapp}`, 150, finalY + 30);
+                doc.setFontSize(8); doc.setFont("helvetica", "normal"); doc.setTextColor(0);
+                doc.text(`WhatsApp: ${salesInfo.whatsapp}`, 150, finalY + 25);
 
                 doc.save(`Penawaran_${selectedLead.company}.pdf`);
             };
@@ -159,27 +171,25 @@
                     const filtered = masterPrices.filter(p => selectedCategories.includes(p.category));
                     setQuoteItems(filtered.map(p => ({ ...p, qty: 1 })));
                 }
-            }, [selectedCategories, isModalOpen]);
-
-            const totalAmount = useMemo(() => quoteItems.reduce((acc, item) => acc + (item.isp * item.qty), 0), [quoteItems]);
+            }, [selectedCategories, isModalOpen, masterPrices]);
 
             return (
                 <div className="min-h-screen flex flex-col">
                     <header className="bg-white border-b-4 border-blue-600 p-4 shadow-sm flex justify-between items-center sticky top-0 z-50">
                         <div className="flex items-center gap-3">
                             <div className="bg-blue-600 p-2 rounded-xl text-white shadow-lg"><i data-lucide="building-2"></i></div>
-                            <h1 className="font-black text-slate-800 uppercase text-xs md:text-base tracking-tighter">{salesInfo.company}</h1>
+                            <h1 className="font-black text-slate-800 uppercase text-xs md:text-sm">{salesInfo.company} {salesInfo.subCompany}</h1>
                         </div>
                         <nav className="flex bg-slate-100 p-1 rounded-xl">
-                            <button onClick={() => setActiveTab('dashboard')} className={`px-4 py-2 rounded-lg text-[10px] font-black transition-all ${activeTab === 'dashboard' ? 'bg-white shadow text-blue-600' : 'text-slate-400'}`}>DASHBOARD</button>
-                            <button onClick={() => setActiveTab('manage')} className={`px-4 py-2 rounded-lg text-[10px] font-black transition-all ${activeTab === 'manage' ? 'bg-white shadow text-blue-600' : 'text-slate-400'}`}>LIST HARGA</button>
+                            <button onClick={() => setActiveTab('dashboard')} className={`px-4 py-2 rounded-lg text-[10px] font-black ${activeTab === 'dashboard' ? 'bg-white shadow text-blue-600' : 'text-slate-400'}`}>BERANDA</button>
+                            <button onClick={() => setActiveTab('manage')} className={`px-4 py-2 rounded-lg text-[10px] font-black ${activeTab === 'manage' ? 'bg-white shadow text-blue-600' : 'text-slate-400'}`}>LIST HARGA</button>
                         </nav>
                     </header>
 
                     <main className="max-w-7xl w-full mx-auto p-6 flex-1">
                         {activeTab === 'manage' ? (
-                            <div className="space-y-6 animate-in fade-in">
-                                <div className="bg-slate-900 p-8 rounded-[2rem] text-white flex justify-between items-center relative overflow-hidden">
+                            <div className="space-y-6">
+                                <div className="bg-slate-900 p-8 rounded-[2rem] text-white flex justify-between items-center relative overflow-hidden shadow-2xl">
                                     <div className="relative z-10">
                                         <h3 className="text-xl font-black mb-1">Update Master Harga</h3>
                                         <label className="bg-blue-600 px-6 py-3 rounded-xl text-[10px] font-black cursor-pointer inline-block mt-4">
@@ -204,20 +214,22 @@
                         ) : (
                             <div className="space-y-6">
                                 <div className="bg-blue-600 p-8 rounded-[2rem] text-white flex justify-between items-center shadow-xl">
-                                    <div><h2 className="text-2xl font-black mb-4">Portal Penawaran</h2>
-                                    <label className="bg-white text-blue-600 px-6 py-3 rounded-xl text-[10px] font-black cursor-pointer inline-block">
-                                        IMPORT DATA APJII <input type="file" className="hidden" accept=".csv" onChange={handleLeadsUpload} />
-                                    </label></div>
+                                    <div>
+                                        <h2 className="text-2xl font-black mb-4 leading-none text-white tracking-tight">Portal Sales: {salesInfo.name}</h2>
+                                        <label className="bg-white text-blue-600 px-6 py-3 rounded-xl text-[10px] font-black cursor-pointer inline-block">
+                                            IMPORT DATA APJII <input type="file" className="hidden" accept=".csv" onChange={handleLeadsUpload} />
+                                        </label>
+                                    </div>
                                     <i data-lucide="users" className="opacity-20" size={80}></i>
                                 </div>
                                 <div className="bg-white rounded-[2rem] shadow-sm border overflow-hidden">
                                     <table className="w-full text-left">
-                                        <thead className="bg-slate-50 border-b text-[10px] font-black text-slate-400 uppercase">
-                                            <tr><th className="p-6">Perusahaan</th><th className="p-6">Wilayah</th><th className="p-6 text-right">Aksi</th></tr>
+                                        <thead className="bg-slate-50 border-b text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                            <tr><th className="p-6 text-white bg-slate-800">Nama Perusahaan</th><th className="p-6 bg-slate-800 text-right">Aksi</th></tr>
                                         </thead>
                                         <tbody className="divide-y">
                                             {leads.map(lead => (
-                                                <tr key={lead.id}><td className="p-6 font-bold text-sm">{lead.company}</td><td className="p-6 text-xs text-slate-500 uppercase font-bold">{lead.city}</td><td className="p-6 text-right"><button onClick={() => { setSelectedLead(lead); setIsModalOpen(true); }} className="bg-slate-900 text-white px-6 py-2 rounded-xl text-[10px] font-black uppercase">BUAT PENAWARAN</button></td></tr>
+                                                <tr key={lead.id}><td className="p-6 font-bold text-sm text-slate-800">{lead.company}</td><td className="p-6 text-[10px] text-slate-500 font-bold uppercase">{lead.city}</td><td className="p-6 text-right"><button onClick={() => { setSelectedLead(lead); setIsModalOpen(true); }} className="bg-slate-900 text-white px-6 py-2 rounded-xl text-[10px] font-black uppercase">PENAWARAN</button></td></tr>
                                             ))}
                                         </tbody>
                                     </table>
@@ -241,7 +253,7 @@
                                                 <button key={cat} onClick={() => {
                                                     const next = selectedCategories.includes(cat) ? selectedCategories.filter(c => c !== cat) : [...selectedCategories, cat];
                                                     setSelectedCategories(next.length ? next : ['ADSS']);
-                                                }} className={`px-4 py-2 rounded-xl text-[9px] font-black border-2 transition-all ${selectedCategories.includes(cat) ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-slate-100 text-slate-400'}`}>{cat}</button>
+                                                }} className={`px-4 py-2 rounded-xl text-[9px] font-black border-2 transition-all ${selectedCategories.includes(cat) ? 'bg-blue-600 border-blue-600 text-white shadow-lg' : 'bg-white border-slate-100 text-slate-400'}`}>{cat}</button>
                                             ))}
                                         </div>
                                     </div>
@@ -252,7 +264,7 @@
                                                     <div className="flex-1 pr-4"><p className="text-[11px] font-bold text-slate-700">{item.name}</p><p className="text-[10px] font-black text-blue-500 uppercase mt-1">{formatIDR(item.isp)}</p></div>
                                                     <div className="flex items-center gap-4">
                                                         <div className="flex items-center bg-white p-1 rounded-xl shadow-sm border">
-                                                            <button onClick={() => setQuoteItems(q => q.map(it => it.id === item.id ? {...it, qty: Math.max(1, it.qty - 1)} : it))} className="p-1"><i data-lucide="minus-circle" size={16}></i></button>
+                                                            <button onClick={() => setQuoteItems(q => q.map(it => it.id === item.id ? {...it, qty: Math.max(1, i.qty - 1)} : it))} className="p-1"><i data-lucide="minus-circle" size={16}></i></button>
                                                             <span className="text-xs font-black w-6 text-center">{item.qty}</span>
                                                             <button onClick={() => setQuoteItems(q => q.map(it => it.id === item.id ? {...it, qty: it.qty + 1} : it))} className="p-1"><i data-lucide="plus-circle" size={16}></i></button>
                                                         </div>
@@ -263,10 +275,10 @@
                                         </div>
                                         <div className="mt-6 p-8 bg-blue-50 rounded-[2.5rem] flex flex-col md:flex-row justify-between items-center gap-6">
                                             <div className="text-center md:text-left">
-                                                <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">Total (Inc. PPN 11%)</p>
-                                                <h3 className="text-2xl font-black text-blue-700">{formatIDR(totalAmount)}</h3>
+                                                <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Grand Total (Inc. PPN 11%)</p>
+                                                <h3 className="text-2xl font-black text-blue-700">{formatIDR(quoteItems.reduce((a, b) => a + (b.isp * b.qty), 0))}</h3>
                                             </div>
-                                            <button onClick={downloadPDF} className="bg-blue-600 text-white px-10 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl">UNDUH PDF</button>
+                                            <button onClick={downloadPDF} className="bg-blue-600 text-white px-10 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-blue-200">UNDUH PDF PENAWARAN</button>
                                         </div>
                                     </div>
                                 </div>
