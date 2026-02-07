@@ -1,464 +1,350 @@
-<!DOCTYPE html>
-<html lang="id">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Laporan Kartu Stok Fisik Barang - PT. GMS</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    
-    <script type="module">
-        // Firebase SDK
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc, setDoc, getDoc, query, writeBatch, getDocs, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        
-        // GANTI BAGIAN DI BAWAH INI DENGAN KONFIGURASI DARI PROYEK FIREBASE ANDA
-        const firebaseConfig = {
-          apiKey: "AIzaSyBN6dL5426rxsTg9uMWh7TY7CsUUoMShtc", // Ganti dengan milik Anda
-          authDomain: "aplikasi-kas-gms.firebaseapp.com", // Ganti dengan milik Anda
-          projectId: "aplikasi-kas-gms", // Ganti dengan milik Anda
-          storageBucket: "aplikasi-kas-gms.appspot.com", // Ganti dengan milik Anda
-          messagingSenderId: "114489294414", // Ganti dengan milik Anda
-          appId: "1:114489294414:web:12c579bd0748d462180d1f" // Ganti dengan milik Anda
-        };
-        // ------------------------------------------------------------------------------------------
+import React, { useState, useMemo, useEffect } from 'react';
+import { 
+  Search, MapPin, MessageCircle, Mail, FileText, Building2, CheckCircle2,
+  Users, Filter, ChevronRight, Upload, X, Phone, Download, List, Settings, 
+  Plus, Trash2, Database, LayoutDashboard, Briefcase, Info, Check, AlertCircle,
+  MinusCircle
+} from 'lucide-react';
 
-        // --- DOM ELEMENTS & CONFIG CHECK ---
-        const configErrorEl = document.getElementById('config-error');
-        const authForms = document.getElementById('auth-forms');
-        if (!firebaseConfig.apiKey || firebaseConfig.apiKey.includes("MASUKKAN")) {
-             if(configErrorEl && authForms) {
-                authForms.classList.add('hidden');
-                configErrorEl.innerHTML = `<h3 class="text-xl font-semibold mb-4 text-center text-red-600">Konfigurasi Dibutuhkan</h3><p class="text-center text-gray-700">Anda perlu memasukkan konfigurasi Firebase Anda ke dalam file HTML ini agar aplikasi dapat berjalan.</p>`;
-                configErrorEl.classList.remove('hidden');
-            }
-            throw new Error("Firebase configuration is missing.");
-        }
+const App = () => {
+  // --- State Utama ---
+  const [activeTab, setActiveTab] = useState('dashboard');
+  const [data, setData] = useState([]); 
+  const [loading, setLoading] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCity, setSelectedCity] = useState('Semua Kota');
+  const [selectedLead, setSelectedLead] = useState(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [libsReady, setLibsReady] = useState(false);
+  
+  // Informasi Kontak Sales Tetap
+  const salesName = 'Kherisno';
+  const salesEmail = 'sales@glori.id';
+  const salesPhone = '081314271921';
+  const companyName = 'PT.Glori Mitra Sukses';
 
-        // Initialize Firebase
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-        
-        // --- GLOBAL APP STATE ---
-        let allTransactions = []; let stockChart; let userId = null; let currentTransactionId = null;
-        let dbTransactionPath = ''; let dbSettingsPath = ''; let dbItemMasterPath = '';
-        let unsubscribe = null; let itemSettings = {}; let itemMasterData = {};
-        
-        // --- DOM ELEMENTS ---
-        const authView = document.getElementById('auth-view'); const appView = document.getElementById('app-view');
-        const loginForm = document.getElementById('login-form'); const registerForm = document.getElementById('register-form');
-        const authError = document.getElementById('auth-error'); const showRegisterBtn = document.getElementById('show-register-btn');
-        const showLoginBtn = document.getElementById('show-login-btn'); const logoutBtn = document.getElementById('logout-btn');
-        const userEmailDisplay = document.getElementById('user-email-display');
-        const mainItemSelector = document.getElementById('main-item-selector');
-        const initialStockInput = document.getElementById('initial-stock-input');
-        const saveInitialStockBtn = document.getElementById('save-initial-stock-btn');
-        const saveStatusEl = document.getElementById('save-status');
-        const cardSaldoAwal = document.getElementById('card-saldo-awal'); const cardTotalMasuk = document.getElementById('card-total-masuk');
-        const cardTotalKeluar = document.getElementById('card-total-keluar'); const cardSaldoAkhir = document.getElementById('card-saldo-akhir');
-        const transactionForm = document.getElementById('transaction-form'); const transactionTableBody = document.getElementById('transaction-table-body');
-        const printHistoryBtn = document.getElementById('print-history-btn'); const printSummaryBtn = document.getElementById('print-summary-btn');
-        const manageItemsBtn = document.getElementById('manage-items-btn'); const importModal = document.getElementById('import-modal');
-        const importForm = document.getElementById('import-form'); const importTextarea = document.getElementById('import-textarea');
-        const importStatus = document.getElementById('import-status'); const cancelImportBtn = document.getElementById('cancel-import-btn');
-        const editModal = document.getElementById('edit-modal'); const deleteModal = document.getElementById('delete-modal');
+  // Database Produk & Harga (Master Data)
+  const [masterPrices, setMasterPrices] = useState([
+    { id: 1, category: "ADSS", name: "FIBER OPTIC CABLE ADSS 288 CORE (24 TUBE) 4 KM", isp: 180000000, msrp: 199800000 },
+    { id: 2, category: "ADSS", name: "FIBER OPTIC CABLE ADSS 144 CORE (12 TUBE) 4 KM", isp: 90000000, msrp: 99900000 },
+    { id: 3, category: "Drop Core", name: "FTTH DROP CABLE 1 CORE 3 MESSENGER 1 KM", isp: 650000, msrp: 750000 },
+    { id: 4, category: "ODP/ODF", name: "OPTIC DISTRIBUTION POINT 16 CORES Grey ABS", isp: 399000, msrp: 442890 }
+  ]);
 
-        // --- AUTHENTICATION ---
-        onAuthStateChanged(auth, user => {
-            if (user) {
-                userId = user.uid;
-                userEmailDisplay.textContent = user.email;
-                dbTransactionPath = `/artifacts/${firebaseConfig.appId}/users/${userId}/stock_transactions`;
-                dbSettingsPath = `/artifacts/${firebaseConfig.appId}/users/${userId}/stock_settings`;
-                dbItemMasterPath = `/artifacts/${firebaseConfig.appId}/public/data/item_master`;
-                authView.classList.add('hidden'); appView.classList.remove('hidden');
-                loadInitialData();
-            } else {
-                if (unsubscribe) unsubscribe(); userId = null; authView.classList.remove('hidden'); appView.classList.add('hidden');
-            }
-        });
+  const [quoteItems, setQuoteItems] = useState([]);
+  const [quoteConfig, setQuoteConfig] = useState({
+    selectedCategories: ['ADSS'], 
+    priceGroup: 'ISP', 
+    discountPercent: 0
+  });
 
-        const handleRegister = (e) => { e.preventDefault(); const email = registerForm.email.value; const password = registerForm.password.value; authError.textContent = ''; createUserWithEmailAndPassword(auth, email, password).then(cred => registerForm.reset()).catch(err => authError.textContent = getFriendlyAuthError(err.code)); };
-        const handleLogin = (e) => { e.preventDefault(); const email = loginForm.email.value; const password = loginForm.password.value; authError.textContent = ''; signInWithEmailAndPassword(auth, email, password).then(cred => loginForm.reset()).catch(err => authError.textContent = getFriendlyAuthError(err.code)); };
-        const handleLogout = () => signOut(auth);
-        function getFriendlyAuthError(c){switch(c){case'auth/invalid-email':return'Format email tidak valid.';case'auth/user-not-found':case'auth/wrong-password':case'auth/invalid-credential':return'Email atau password salah.';case'auth/email-already-in-use':return'Email ini sudah terdaftar.';case'auth/weak-password':return'Password terlalu lemah (min. 6 karakter).';default:return'Terjadi kesalahan.';}}
+  const categories = ["Drop Core", "Jelly Tube", "Fig8 Armor", "Armored", "Mini Fig 8", "Mini ADSS", "ADSS", "ODP/ODF", "Lainnya"];
 
-        // --- DATA HANDLING ---
-        async function loadInitialData() {
-            await loadItemMaster();
-            const settingsDocRef = doc(db, dbSettingsPath, 'items');
-            const settingsSnap = await getDoc(settingsDocRef);
-            if (settingsSnap.exists()) itemSettings = settingsSnap.data();
-            listenToTransactions();
-        }
-        
-        async function loadItemMaster() {
-            try {
-                const querySnapshot = await getDocs(collection(db, dbItemMasterPath));
-                itemMasterData = {};
-                querySnapshot.forEach((doc) => {
-                    itemMasterData[doc.id] = doc.data().items || [];
-                });
-                populateItemDropdowns();
-            } catch (error) {
-                console.error("Error loading item master:", error);
-                alert("Gagal memuat daftar barang. Pastikan aturan Firebase sudah diperbarui.");
-            }
-        }
+  // --- Load PDF Libraries ---
+  useEffect(() => {
+    const loadScript = (id, src, callback) => {
+      if (!document.getElementById(id)) {
+        const script = document.createElement('script');
+        script.id = id; script.src = src; script.async = true;
+        script.onload = callback;
+        document.body.appendChild(script);
+      } else if (callback) { callback(); }
+    };
 
-        function populateItemDropdowns() {
-            const itemSelectors = [document.getElementById('main-item-selector'), document.getElementById('form-item-name'), document.querySelector('#edit-form select[name="itemName"]')];
-            itemSelectors.forEach(selector => {
-                selector.innerHTML = '<option value="">-- Pilih Nama Barang --</option>'; // Clear existing
-                const sortedCategories = Object.keys(itemMasterData).sort();
-                for (const category of sortedCategories) {
-                    const optgroup = document.createElement('optgroup');
-                    optgroup.label = category;
-                    itemMasterData[category].forEach(item => {
-                        const option = document.createElement('option');
-                        option.value = item;
-                        option.textContent = item;
-                        optgroup.appendChild(option);
-                    });
-                    selector.appendChild(optgroup);
-                }
-            });
-        }
+    loadScript('jspdf-main', "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js", () => {
+      loadScript('jspdf-table', "https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js", () => {
+        setLibsReady(true);
+      });
+    });
+  }, []);
 
-        function listenToTransactions() {
-            if (unsubscribe) unsubscribe();
-            const q = query(collection(db, dbTransactionPath));
-            unsubscribe = onSnapshot(q, (snapshot) => {
-                allTransactions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                updateDisplay();
-            });
-        }
+  // --- Filter Leads ---
+  const cities = useMemo(() => ['Semua Kota', ...Array.from(new Set(data.map(d => d.city))).sort()], [data]);
+  
+  const filteredLeads = useMemo(() => data.filter(item => {
+    const matchSearch = item.company.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchCity = selectedCity === 'Semua Kota' || item.city === selectedCity;
+    return matchSearch && matchCity;
+  }), [data, searchTerm, selectedCity]);
 
-        async function saveInitialStock() {
-            const selectedItem = mainItemSelector.value; if (!selectedItem) return;
-            const newInitialStock = parseInt(initialStockInput.value, 10) || 0;
-            saveStatusEl.textContent = 'Menyimpan...';
-            try {
-                await setDoc(doc(db, dbSettingsPath, 'items'), { [selectedItem]: newInitialStock }, { merge: true });
-                itemSettings[selectedItem] = newInitialStock;
-                updateDisplay();
-                saveStatusEl.textContent = 'Tersimpan!';
-                setTimeout(() => { saveStatusEl.textContent = ''; }, 2000);
-            } catch (error) { saveStatusEl.textContent = 'Gagal menyimpan.'; }
-        }
-        
-        async function handleFormSubmit(e) {
-            e.preventDefault();
-            const form = e.target;
-            const newTransaction = { date: form.date.value, itemName: form.itemName.value, invoice: form.invoice.value, customerName: form.customerName.value.trim(), description: form.description.value.trim(), type: form.type.value, quantity: parseInt(form.quantity.value, 10), createdAt: new Date().toISOString() };
-            if (!newTransaction.itemName || !newTransaction.date || !newTransaction.quantity) { alert("Tanggal, Nama Barang, dan Jumlah harus diisi."); return; }
-            try {
-                await addDoc(collection(db, dbTransactionPath), newTransaction);
-                form.reset();
-                form.date.valueAsDate = new Date();
-                form.itemName.value = mainItemSelector.value;
-            } catch (error) { alert("Gagal menyimpan transaksi."); }
-        }
+  // --- Sinkronisasi Item Penawaran (TAMPILKAN SEMUA DATA JENIS KABEL YANG DIPILIH) ---
+  useEffect(() => {
+    if (isModalOpen && selectedLead) {
+      const filtered = masterPrices
+        .filter(p => quoteConfig.selectedCategories.includes(p.category))
+        .map(p => ({
+          ...p,
+          qty: 1,
+          priceIncludingTax: quoteConfig.priceGroup === 'MSRP' ? p.msrp : (quoteConfig.priceGroup === 'Special' ? p.isp * (1 - quoteConfig.discountPercent/100) : p.isp)
+        }));
+      setQuoteItems(filtered);
+    }
+  }, [quoteConfig.selectedCategories, quoteConfig.priceGroup, quoteConfig.discountPercent, isModalOpen, masterPrices, selectedLead]);
 
-        // --- UI UPDATE & DISPLAY ---
-        function updateDisplay() {
-            const selectedItem = mainItemSelector.value;
-            document.getElementById('form-item-name').value = selectedItem;
-            if (!selectedItem) {
-                cardSaldoAwal.textContent = '-'; cardTotalMasuk.textContent = '-'; cardTotalKeluar.textContent = '-'; cardSaldoAkhir.textContent = '-';
-                transactionTableBody.innerHTML = '<tr><td colspan="8" class="text-center py-6">Pilih barang untuk melihat riwayat stok.</td></tr>';
-                if(stockChart) stockChart.destroy();
-                return;
-            }
-            const saldoAwal = itemSettings[selectedItem] || 0;
-            const transactionsForItem = allTransactions.filter(t => t.itemName === selectedItem).sort((a, b) => new Date(a.date) - new Date(b.date));
-            let totalMasuk = 0, totalKeluar = 0, runningBalance = saldoAwal;
-            transactionTableBody.innerHTML = '';
-            transactionsForItem.forEach(t => {
-                if (t.type === 'masuk') { totalMasuk += t.quantity; runningBalance += t.quantity; } else { totalKeluar += t.quantity; runningBalance -= t.quantity; }
-                const row = document.createElement('tr'); row.className = 'bg-white border-b';
-                row.innerHTML = `<td class="py-4 px-6">${new Date(t.date).toLocaleDateString('id-ID')}</td><td class="py-4 px-6">${t.invoice || '-'}</td><td class="py-4 px-6">${t.customerName || '-'}</td><td class="py-4 px-6">${t.description || '-'}</td><td class="py-4 px-6 text-green-600">${t.type === 'masuk' ? t.quantity : '-'}</td><td class="py-4 px-6 text-red-600">${t.type === 'keluar' ? t.quantity : '-'}</td><td class="py-4 px-6 font-medium">${runningBalance}</td><td class="py-4 px-6 text-center"><button data-id="${t.id}" class="edit-btn text-blue-600 p-1">✏️</button><button data-id="${t.id}" class="delete-btn text-red-600 p-1">🗑️</button></td>`;
-                transactionTableBody.appendChild(row);
-            });
-            const rows = Array.from(transactionTableBody.querySelectorAll('tr')).reverse();
-            transactionTableBody.innerHTML = '';
-            rows.forEach(row => transactionTableBody.appendChild(row));
-            cardSaldoAwal.textContent = saldoAwal; cardTotalMasuk.textContent = totalMasuk; cardTotalKeluar.textContent = totalKeluar;
-            cardSaldoAkhir.textContent = saldoAwal + totalMasuk - totalKeluar;
-            initialStockInput.value = saldoAwal;
-            updateChart(transactionsForItem, saldoAwal);
-        }
-        function updateChart(data, saldoAwal) {
-            const ctx = document.getElementById('stock-chart').getContext('2d'); if (stockChart) stockChart.destroy();
-            let runningBalance = saldoAwal;
-            const chartData = data.map(t => { runningBalance += (t.type === 'masuk' ? t.quantity : -t.quantity); return { x: new Date(t.date).getTime(), y: runningBalance }; });
-            stockChart = new Chart(ctx, { type: 'line', data: { datasets: [{ label: 'Stok Fisik', data: chartData, borderColor: '#3B82F6', fill: true }] }, options: { responsive: true, maintainAspectRatio: false, scales: { x: { type: 'time', time: { unit: 'day' } }, y: { beginAtZero: true } } } });
-        }
-        
-        // --- MODALS (EDIT, DELETE, IMPORT) ---
-        function openEditModal(transactionId) {
-            const transaction = allTransactions.find(t => t.id === transactionId); if (!transaction) return;
-            currentTransactionId = transactionId; const form = document.getElementById('edit-form');
-            form.date.value = transaction.date; form.itemName.value = transaction.itemName;
-            form.invoice.value = transaction.invoice || ''; form.customerName.value = transaction.customerName || '';
-            form.description.value = transaction.description || ''; form.type.value = transaction.type;
-            form.quantity.value = transaction.quantity; editModal.classList.remove('hidden');
-        }
-        function closeEditModal() { editModal.classList.add('hidden'); currentTransactionId = null; }
-        async function handleEditFormSubmit(e) {
-            e.preventDefault(); if (!currentTransactionId) return;
-            const form = e.target;
-            const updatedData = { date: form.date.value, itemName: form.itemName.value, invoice: form.invoice.value, customerName: form.customerName.value.trim(), description: form.description.value.trim(), type: form.type.value, quantity: parseInt(form.quantity.value, 10) };
-            try { await updateDoc(doc(db, dbTransactionPath, currentTransactionId), updatedData); closeEditModal(); } 
-            catch (error) { alert("Gagal memperbarui transaksi."); }
-        }
-        function openDeleteModal(transactionId) { currentTransactionId = transactionId; deleteModal.classList.remove('hidden'); }
-        function closeDeleteModal() { deleteModal.classList.add('hidden'); currentTransactionId = null; }
-        async function handleDeleteConfirmed() {
-            if (!currentTransactionId) return;
-            try { await deleteDoc(doc(db, dbTransactionPath, currentTransactionId)); closeDeleteModal(); }
-            catch (error) { alert("Gagal menghapus transaksi."); }
-        }
-        async function handleImportData(e) {
-            e.preventDefault();
-            const text = importTextarea.value;
-            if (!text.trim()) { alert("Kotak teks kosong."); return; }
-            importStatus.textContent = 'Mengimpor data...';
-            const categories = {};
-            const lines = text.trim().split('\n');
-            for (const line of lines) {
-                const parts = line.split('\t');
-                if (parts.length >= 2) {
-                    const category = parts[0].trim();
-                    const itemName = parts[1].trim();
-                    if (category && itemName) {
-                        if (!categories[category]) categories[category] = [];
-                        categories[category].push(itemName);
-                    }
-                }
-            }
-            if (Object.keys(categories).length === 0) { alert("Format data tidak valid. Pastikan Anda menyalin 2 kolom dari Excel (Kategori dan Nama Barang)."); importStatus.textContent = ''; return; }
-            try {
-                const batch = writeBatch(db);
-                for (const categoryName in categories) {
-                    const docRef = doc(db, dbItemMasterPath, categoryName);
-                    batch.set(docRef, { items: categories[categoryName] });
-                }
-                await batch.commit();
-                importStatus.textContent = 'Berhasil! Daftar barang telah diperbarui.';
-                await loadItemMaster(); // Refresh dropdowns
-                setTimeout(() => { importModal.classList.add('hidden'); importForm.reset(); importStatus.textContent = ''; }, 2000);
-            } catch (error) {
-                importStatus.textContent = 'Gagal mengimpor. Cek koneksi dan aturan Firebase.';
-                console.error("Import error:", error);
-            }
-        }
+  // --- CSV Parser Robust ---
+  const parseCSV = (text) => {
+    const lines = text.split(/\r?\n/).filter(line => line.trim() !== "");
+    const delimiter = text.includes(";") ? ";" : ",";
+    return lines.map(line => {
+      const regex = new RegExp(`${delimiter}(?=(?:(?:[^"]*"){2})*[^"]*$)`);
+      return line.split(regex).map(col => col.replace(/^"|"$/g, '').trim());
+    });
+  };
 
-        // --- PDF EXPORT ---
-        function generateItemHistoryPDF() {
-            const selectedItem = mainItemSelector.value; if (!selectedItem) { alert("Pilih barang terlebih dahulu."); return; }
-            const { jsPDF } = window.jspdf; const doc = new jsPDF();
-            const saldoAwal = itemSettings[selectedItem] || 0;
-            const transactionsForItem = allTransactions.filter(t => t.itemName === selectedItem).sort((a, b) => new Date(a.date) - new Date(b.date));
-            let runningBalance = saldoAwal;
-            const head = [['Tanggal', 'Invoice/SJ', 'Customer', 'Keterangan', 'Masuk', 'Keluar', 'Saldo']];
-            const body = [];
-            body.push([ { content: 'Saldo Awal', colSpan: 6, styles: { fontStyle: 'bold' } }, { content: saldoAwal, styles: { halign: 'right', fontStyle: 'bold' } } ]);
-            transactionsForItem.forEach(t => {
-                const masuk = t.type === 'masuk' ? t.quantity : ''; const keluar = t.type === 'keluar' ? t.quantity : '';
-                runningBalance += (t.type === 'masuk' ? t.quantity : -t.quantity);
-                body.push([ new Date(t.date).toLocaleDateString('id-ID'), t.invoice || '', t.customerName || '', t.description || '', { content: masuk, styles: { halign: 'right' } }, { content: keluar, styles: { halign: 'right' } }, { content: runningBalance, styles: { halign: 'right' } } ]);
-            });
-            body.push([ { content: 'Saldo Akhir', colSpan: 6, styles: { fontStyle: 'bold' } }, { content: runningBalance, styles: { halign: 'right', fontStyle: 'bold' } } ]);
-            doc.setFontSize(16); doc.text('Laporan Kartu Stok Fisik Barang', 14, 20); doc.setFontSize(12); doc.text(`Nama Barang: ${selectedItem}`, 14, 28);
-            doc.autoTable({ head, body, startY: 35, theme: 'grid' }); doc.save(`kartu-stok-${selectedItem.replace(/ /g, '_')}.pdf`);
-        }
-        function generateStockSummaryPDF() {
-            const { jsPDF } = window.jspdf; const doc = new jsPDF();
-            const allItemNames = Object.values(itemMasterData).flat();
-            const stockSummary = [];
-            allItemNames.forEach(itemName => {
-                const saldoAwal = itemSettings[itemName] || 0;
-                const totalMasuk = allTransactions.filter(t => t.itemName === itemName && t.type === 'masuk').reduce((sum, t) => sum + t.quantity, 0);
-                const totalKeluar = allTransactions.filter(t => t.itemName === itemName && t.type === 'keluar').reduce((sum, t) => sum + t.quantity, 0);
-                const saldoAkhir = saldoAwal + totalMasuk - totalKeluar;
-                if (saldoAkhir > 0) stockSummary.push({ name: itemName, stock: saldoAkhir });
-            });
-            stockSummary.sort((a, b) => a.name.localeCompare(b.name));
-            const head = [['Nama Barang', 'Sisa Stok Akhir']];
-            const body = stockSummary.map(item => [ item.name, { content: item.stock, styles: { halign: 'right' } } ]);
-            doc.setFontSize(16); doc.text('Laporan Sisa Stok Semua Barang', 14, 20);
-            doc.setFontSize(11); doc.text(`Per tanggal: ${new Date().toLocaleDateString('id-ID')}`, 14, 28);
-            doc.autoTable({ head, body, startY: 35, theme: 'grid' }); doc.save('laporan-sisa-stok.pdf');
-        }
+  // --- Handlers Upload ---
+  const handleLeadsUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setLoading(true);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const rows = parseCSV(event.target.result);
+        const parsed = rows.slice(1).map((cols, index) => {
+          if (cols.length < 10) return null;
+          return {
+            id: index,
+            company: cols[0] || 'N/A',
+            brand: cols[2] || '-',
+            address: cols[6] || '',
+            city: cols[9] || 'Luar Kota',
+            phone: cols[12] || '',
+          };
+        }).filter(item => item !== null);
+        setData(parsed);
+      } catch (err) { alert("Format CSV tidak valid."); }
+      finally { setLoading(false); }
+    };
+    reader.readAsText(file);
+  };
 
-        // --- EVENT LISTENERS ---
-        document.addEventListener('DOMContentLoaded', () => {
-            loginForm.addEventListener('submit', handleLogin);
-            registerForm.addEventListener('submit', handleRegister);
-            logoutBtn.addEventListener('click', handleLogout);
-            showRegisterBtn.addEventListener('click', () => { loginForm.classList.add('hidden'); registerForm.classList.remove('hidden'); });
-            showLoginBtn.addEventListener('click', () => { registerForm.classList.add('hidden'); loginForm.classList.remove('hidden'); });
-            mainItemSelector.addEventListener('change', updateDisplay);
-            saveInitialStockBtn.addEventListener('click', saveInitialStock);
-            transactionForm.addEventListener('submit', handleFormSubmit);
-            document.getElementById('edit-form').addEventListener('submit', handleEditFormSubmit);
-            document.getElementById('cancel-edit-btn').addEventListener('click', closeEditModal);
-            document.getElementById('confirm-delete-btn').addEventListener('click', handleDeleteConfirmed);
-            document.getElementById('cancel-delete-btn').addEventListener('click', closeDeleteModal);
-            printHistoryBtn.addEventListener('click', generateItemHistoryPDF);
-            printSummaryBtn.addEventListener('click', generateStockSummaryPDF);
-            manageItemsBtn.addEventListener('click', () => importModal.classList.remove('hidden'));
-            cancelImportBtn.addEventListener('click', () => importModal.classList.add('hidden'));
-            importForm.addEventListener('submit', handleImportData);
-            transactionTableBody.addEventListener('click', (e) => {
-                if(e.target.closest('.edit-btn')) openEditModal(e.target.closest('.edit-btn').dataset.id);
-                if(e.target.closest('.delete-btn')) openDeleteModal(e.target.closest('.delete-btn').dataset.id);
-            });
-        });
-    </script>
-    <style>
-        body { font-family: 'Inter', sans-serif; background-color: #F8F7F4; color: #333; }
-        .card { background-color: #FFFFFF; border-radius: 0.75rem; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); }
-        .btn { border-radius: 0.5rem; padding: 0.625rem 1.25rem; font-weight: 500; transition: all 0.2s ease-in-out; border: 1px solid transparent; cursor: pointer; }
-        .btn-sm { padding: 0.375rem 0.75rem; font-size: 0.875rem; }
-        .btn-primary { background-color: #3B82F6; color: white; } .btn-primary:hover { background-color: #2563EB; }
-        .btn-secondary { background-color: #E5E7EB; color: #374151; border-color: #D1D5DB; } .btn-secondary:hover { background-color: #D1D5DB; }
-        .btn-danger { background-color: #EF4444; color: white; } .btn-danger:hover { background-color: #DC2626; }
-        .form-input, .form-select { border-radius: 0.5rem; border: 1px solid #D1D5DB; padding: 0.5rem 0.75rem; width: 100%; }
-        .form-input:focus, .form-select:focus { outline: none; border-color: #3B82F6; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.4); }
-        .chart-container { position: relative; width: 100%; height: 300px; }
-    </style>
-</head>
-<body>
-    <!-- Auth View -->
-    <div id="auth-view" class="flex items-center justify-center min-h-screen bg-gray-100">
-        <div class="w-full max-w-md p-8 space-y-6 bg-white rounded-lg shadow-md">
-            <div><h2 class="text-2xl font-bold text-center">Laporan Kartu Stok Fisik Barang</h2><p class="text-center text-gray-600">PT. Glori Mitra Sukses (GMS)</p></div>
-            <div id="config-error" class="hidden"></div>
-            <div id="auth-forms">
-                <form id="login-form"><h3 class="text-xl font-semibold mb-4 text-center">Login</h3><div class="space-y-4"><div><label for="login-email" class="sr-only">Email</label><input type="email" id="login-email" name="email" class="form-input" placeholder="Alamat email" required></div><div><label for="login-password" class="sr-only">Password</label><input type="password" id="login-password" name="password" class="form-input" placeholder="Password" required></div></div><button type="submit" class="w-full mt-6 btn btn-primary">Masuk</button></form>
-                <form id="register-form" class="hidden"><h3 class="text-xl font-semibold mb-4 text-center">Daftar Akun Baru</h3><div class="space-y-4"><div><label for="register-email" class="sr-only">Email</label><input type="email" id="register-email" name="email" class="form-input" placeholder="Alamat email" required></div><div><label for="register-password" class="sr-only">Password</label><input type="password" id="register-password" name="password" class="form-input" placeholder="Password (min. 6 karakter)" required></div></div><button type="submit" class="w-full mt-6 btn btn-primary">Daftar</button></form>
-                <p id="auth-error" class="text-sm text-center text-red-600 h-4"></p>
-                <div class="text-sm text-center text-gray-600"><p>Belum punya akun? <button type="button" id="show-register-btn" class="font-medium text-blue-600 hover:underline">Daftar</button></p><p class="hidden">Sudah punya akun? <button type="button" id="show-login-btn" class="font-medium text-blue-600 hover:underline">Login</button></p></div>
+  const handlePriceUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const rows = parseCSV(event.target.result);
+        const parsed = rows.slice(1).map((cols, index) => {
+          if (cols.length < 2) return null;
+          const name = cols[0];
+          const isp = parseFloat(cols[1]?.replace(/[^\d.-]/g, '')) || 0;
+          const msrp = parseFloat(cols[2]?.replace(/[^\d.-]/g, '')) || isp * 1.1;
+          const ln = name.toLowerCase();
+          let category = "Lainnya";
+          if (ln.includes("drop core") || ln.includes("ftth drop")) category = "Drop Core";
+          else if (ln.includes("mini adss")) category = "Mini ADSS";
+          else if (ln.includes("adss")) category = "ADSS";
+          else if (ln.includes("gyxtw")) category = "Armored";
+          else if (ln.includes("odp") || ln.includes("odf")) category = "ODP/ODF";
+          return { id: Date.now() + index, category, name, isp, msrp };
+        }).filter(item => item !== null);
+        setMasterPrices(parsed);
+        alert(`Daftar harga diperbarui (${parsed.length} produk).`);
+      } catch (err) { alert("Gagal memuat list harga."); }
+    };
+    reader.readAsText(file);
+  };
+
+  const formatIDR = (val) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(val);
+
+  // Kalkulasi Breakdown Pajak
+  const breakdown = useMemo(() => {
+    const totalWithTax = quoteItems.reduce((acc, item) => acc + (item.priceIncludingTax * item.qty), 0);
+    const subtotalBase = totalWithTax / 1.11;
+    const ppnValue = totalWithTax - subtotalBase;
+    return { subtotalBase, ppnValue, totalWithTax };
+  }, [quoteItems]);
+
+  const getRawWAMessage = (lead) => {
+    const itemsStr = quoteItems.slice(0, 8).map(p => `• ${p.name} (x${p.qty}): *${formatIDR(p.priceIncludingTax * p.qty)}*`).join('\n');
+    return `Selamat pagi Pak/Bu 🙏\n\nPerkenalkan saya *${salesName} – eHose Fiber Cable*.\nBerikut ringkasan penawaran untuk *${lead.company}*:\n\n${itemsStr}\n\n*Total Akhir (Inc. PPN 11%): ${formatIDR(breakdown.totalWithTax)}*\n\nTerima kasih.\n\n---\n*Kherisno*\nEmail: ${salesEmail}\nWhatsApp: ${salesPhone}`;
+  };
+
+  // --- GENERATE PDF (KOP RESMI PT.Glori Mitra Sukses) ---
+  const generatePDF = (lead) => {
+    try {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+
+      // 1. KOP SURAT (Layout Logo GMS Biru)
+      doc.setFillColor(0, 51, 153);
+      doc.rect(15, 12, 16, 16, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(10);
+      doc.text("GMS", 17.5, 22);
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(28);
+      doc.setTextColor(0, 51, 153);
+      doc.text("PT.Glori Mitra Sukses", 36, 23);
+      
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(100);
+      const rX = 195;
+      doc.text("(021) 6505001", rX, 15, { align: "right" });
+      doc.text(salesEmail, rX, 19, { align: "right" });
+      doc.text("Komplek Ruko Artha Center I, Jakarta Barat,", rX, 23, { align: "right" });
+      doc.text("DKI Jakarta - 11110", rX, 27, { align: "right" });
+      
+      doc.setLineWidth(1.2); doc.setDrawColor(0, 51, 153); doc.line(15, 34, 195, 34);
+      doc.setLineWidth(0.4); doc.line(15, 35.5, 195, 35.5);
+
+      // 2. DETAIL SURAT
+      doc.setFontSize(14); doc.setTextColor(0); doc.setFont("helvetica", "bold");
+      doc.text("SURAT PENAWARAN HARGA", 105, 50, { align: "center" });
+      
+      doc.setFontSize(9); doc.setFont("helvetica", "normal");
+      doc.text(`Tanggal: ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`, 15, 60);
+      doc.text(`No: QTN/GMS/${new Date().getFullYear()}/${Math.floor(1000 + Math.random() * 9000)}`, 15, 65);
+      
+      doc.setFont("helvetica", "bold");
+      doc.text(`Kepada Yth:`, 15, 75);
+      doc.text(lead.company, 15, 80);
+      doc.setFont("helvetica", "normal");
+      doc.text(`Alamat: ${lead.address || lead.city}`, 15, 85, { maxWidth: 130 });
+      if (lead.phone) doc.text(`Telp: ${lead.phone}`, 15, 93);
+
+      doc.text("Dengan hormat, bersama ini kami sampaikan penawaran harga eHose Fiber Cable sebagai berikut:", 15, 105);
+
+      // 3. TABEL PENAWARAN (SEMUA DATA)
+      const tableData = quoteItems.map((item, i) => {
+        const basePrice = item.priceIncludingTax / 1.11;
+        return [i + 1, item.name, `${item.qty} Unit`, formatIDR(basePrice), formatIDR(basePrice * item.qty)];
+      });
+
+      doc.autoTable({
+        startY: 110,
+        head: [['No', 'Deskripsi Produk', 'Qty', 'Harga Satuan', 'Total']],
+        body: tableData,
+        foot: [
+          ['', '', '', 'SUBTOTAL (DPP)', formatIDR(breakdown.subtotalBase)],
+          ['', '', '', 'PPN 11%', formatIDR(breakdown.ppnValue)],
+          ['', '', '', 'GRAND TOTAL', formatIDR(breakdown.totalWithTax)]
+        ],
+        headStyles: { fillColor: [0, 51, 153], fontStyle: 'bold', halign: 'center' },
+        footStyles: { fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: 'bold' },
+        columnStyles: { 0: { halign: 'center' }, 2: { halign: 'center' }, 3: { halign: 'right' }, 4: { halign: 'right' } },
+        theme: 'grid',
+        margin: { left: 15, right: 15 }
+      });
+
+      // 4. PENUTUP & KONTAK
+      const finalY = doc.lastAutoTable.finalY + 15;
+      doc.setFontSize(10);
+      doc.text("Hormat kami,", 150, finalY, { align: "center" });
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(0, 51, 153);
+      doc.text(salesName, 150, finalY + 25, { align: "center" });
+      doc.setFontSize(8); doc.setFont("helvetica", "normal");
+      doc.text(`Email: ${salesEmail}`, 150, finalY + 29, { align: "center" });
+      doc.text(`WA: ${salesPhone}`, 150, finalY + 33, { align: "center" });
+      doc.setFont("helvetica", "bold");
+      doc.text("PT.Glori Mitra Sukses", 150, finalY + 40, { align: "center" });
+
+      doc.save(`Penawaran_${lead.company.replace(/\s+/g, '_')}.pdf`);
+    } catch (e) { alert("Gagal unduh PDF."); }
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-50 font-sans text-slate-900 pb-20">
+      <header className="bg-white border-b-4 border-blue-600 sticky top-0 z-30 shadow-lg px-6 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
+        <div className="flex items-center gap-4">
+          <div className="bg-blue-600 p-3 rounded-2xl text-white shadow-xl shadow-blue-200"><Building2 size={32} /></div>
+          <div>
+            <h1 className="text-xl font-black text-slate-800 uppercase tracking-tight">{companyName}</h1>
+            <div className="flex gap-2 mt-1">
+              <button onClick={() => setActiveTab('dashboard')} className={`text-[10px] font-black px-4 py-1.5 rounded-full border transition-all ${activeTab === 'dashboard' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-400'}`}>DASHBOARD</button>
+              <button onClick={() => setActiveTab('manage')} className={`text-[10px] font-black px-4 py-1.5 rounded-full border transition-all ${activeTab === 'manage' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-400'}`}>KELOLA HARGA</button>
             </div>
+          </div>
         </div>
-    </div>
+        <div className="flex items-center gap-3 bg-slate-100 p-2 rounded-2xl border border-slate-200">
+           <div className="text-right px-2"><p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Lead Sales</p><p className="text-sm font-black text-blue-700">{salesName}</p></div>
+           <div className="h-10 w-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold">K</div>
+        </div>
+      </header>
 
-    <!-- Main App View -->
-    <div id="app-view" class="hidden max-w-7xl mx-auto p-4 md:p-8">
-        <header class="flex flex-wrap justify-between items-start text-center mb-4">
-            <div><h1 class="text-3xl md:text-4xl font-bold text-gray-800">Laporan Kartu Stok Fisik Barang</h1><p class="text-lg text-gray-600">PT. Glori Mitra Sukses (GMS)</p></div>
-            <div class="text-right"><p id="user-email-display" class="text-sm text-gray-700"></p><button id="logout-btn" class="btn btn-secondary mt-1">Logout</button></div>
-        </header>
-
-        <section class="card p-4 mb-8">
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
-                <div>
-                    <label for="main-item-selector" class="block text-sm font-medium text-gray-700 mb-1">Pilih Barang untuk Dilihat</label>
-                    <select id="main-item-selector" class="form-select">
-                        <option value="">-- Pilih Nama Barang --</option>
-                    </select>
-                </div>
-                <div class="flex items-center gap-4">
-                    <div class="flex-grow">
-                        <label for="initial-stock-input" class="block text-sm font-medium text-gray-700 mb-1">Stok Awal</label>
-                        <input type="number" id="initial-stock-input" class="form-input" placeholder="0">
-                    </div>
-                    <div>
-                        <button id="save-initial-stock-btn" class="btn btn-primary btn-sm">Simpan</button>
-                    </div>
-                    <span id="save-status" class="text-sm text-green-600 pt-6"></span>
-                </div>
-                 <div>
-                    <button id="manage-items-btn" class="btn btn-secondary w-full">Kelola Daftar Barang</button>
-                </div>
+      <main className="max-w-7xl mx-auto p-6">
+        {activeTab === 'manage' ? (
+          <div className="space-y-6">
+            <div className="bg-gradient-to-br from-indigo-700 to-blue-900 p-10 rounded-[3rem] shadow-2xl text-white flex justify-between items-center relative overflow-hidden">
+               <div className="relative z-10">
+                 <h3 className="text-2xl font-black mb-2">Manajemen List Harga</h3>
+                 <p className="text-blue-100 text-sm mb-6 opacity-80 italic">Format: Nama Barang, Harga ISP (Include PPN), MSRP.</p>
+                 <label className="bg-white text-blue-900 py-4 px-10 rounded-2xl inline-flex items-center gap-2 cursor-pointer text-sm font-black shadow-xl hover:scale-105 transition-transform"><Upload size={20} /> UPLOAD CSV <input type="file" className="hidden" accept=".csv" onChange={handlePriceUpload} /></label>
+               </div>
+               <Database size={180} className="absolute -right-10 -bottom-10 opacity-10 rotate-12" />
             </div>
-        </section>
+            <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden overflow-x-auto">
+               <table className="w-full text-left"><thead className="bg-slate-50 border-b border-slate-200"><tr><th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Kategori</th><th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Nama Produk</th><th className="p-6 text-[10px] font-black text-slate-400 uppercase text-right">Harga (Inc PPN)</th></tr></thead><tbody className="divide-y divide-slate-100">{masterPrices.map(item => (<tr key={item.id} className="hover:bg-blue-50/20 transition-all"><td className="p-6"><span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-[10px] font-black uppercase whitespace-nowrap">{item.category}</span></td><td className="p-6 text-sm font-bold text-slate-700">{item.name}</td><td className="p-6 text-right text-sm font-black text-blue-600">{formatIDR(item.isp)}</td></tr>))}</tbody></table>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+              <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm flex items-center gap-4"><div className="bg-blue-50 p-4 rounded-2xl text-blue-600"><Users size={28}/></div><div><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Leads</p><h3 className="text-3xl font-black">{data.length}</h3></div></div>
+              <div className="md:col-span-3 bg-gradient-to-br from-blue-700 to-indigo-900 p-10 rounded-[3rem] shadow-2xl text-white flex justify-between items-center relative overflow-hidden group">
+                <div className="relative z-10"><h3 className="text-2xl font-black mb-1">Database Leads APJII</h3><p className="text-blue-100 text-sm mb-6 opacity-80 leading-relaxed italic">Upload database pelanggan untuk otomatisasi penawaran harga kabel eHose.</p><label className="bg-white text-blue-900 py-3.5 px-8 rounded-2xl inline-flex items-center gap-2 cursor-pointer text-sm font-black shadow-xl hover:scale-105 transition-transform"><Upload size={18} /> IMPORT DATA APJII <input type="file" className="hidden" accept=".csv" onChange={handleLeadsUpload} /></label></div>
+                <Briefcase size={200} className="opacity-10 absolute right-10 rotate-12 transition-transform group-hover:rotate-45 duration-700" />
+              </div>
+            </div>
 
-        <main>
-            <section id="summary-cards" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                <div class="card p-6"><h3 class="text-md font-medium text-gray-500">Saldo Awal</h3><p id="card-saldo-awal" class="text-3xl font-bold text-gray-800">-</p></div>
-                <div class="card p-6"><h3 class="text-md font-medium text-gray-500">Total Masuk</h3><p id="card-total-masuk" class="text-3xl font-bold text-green-600">-</p></div>
-                <div class="card p-6"><h3 class="text-md font-medium text-gray-500">Total Keluar</h3><p id="card-total-keluar" class="text-3xl font-bold text-red-600">-</p></div>
-                <div class="card p-6 bg-blue-500 text-white"><h3 class="text-md font-medium text-blue-100">Saldo Akhir</h3><p id="card-saldo-akhir" class="text-3xl font-bold">-</p></div>
-            </section>
+            <div className="bg-white p-5 rounded-[2.2rem] border border-slate-200 shadow-sm mb-6 flex gap-4"><div className="relative flex-1"><Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" /><input type="text" placeholder="Cari Nama Perusahaan..." className="w-full pl-12 pr-6 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold outline-none focus:ring-4 focus:ring-blue-500/10 transition-all" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div><select className="bg-slate-50 border border-slate-200 rounded-2xl px-6 py-3.5 text-sm font-bold outline-none cursor-pointer" value={selectedCity} onChange={(e) => setSelectedCity(e.target.value)}>{cities.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
+            <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden overflow-x-auto"><table className="w-full text-left"><thead className="bg-slate-50/80"><tr><th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Company Name</th><th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Regional / City</th><th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Tool</th></tr></thead><tbody className="divide-y divide-slate-100">{filteredLeads.map(lead => (<tr key={lead.id} className="hover:bg-blue-50/40 transition-all group"><td className="px-8 py-6 font-extrabold text-slate-800 text-base">{lead.company}</td><td className="px-8 py-6 text-[11px] font-bold text-slate-600"><MapPin size={12} className="inline mr-1 text-blue-500" /> {lead.city}</td><td className="px-8 py-6 text-right"><button onClick={() => { setSelectedLead(lead); setIsModalOpen(true); }} className="bg-slate-900 text-white py-3 px-8 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-600 transition-all shadow-lg hover:shadow-blue-500/30">PENAWARAN</button></td></tr>))}</tbody></table></div>
+          </>
+        )}
+      </main>
 
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
-                <section class="lg:col-span-1 card p-6">
-                    <h2 class="text-xl font-bold mb-4">Tambah Transaksi Stok</h2>
-                    <form id="transaction-form" class="space-y-4">
-                        <div><label for="form-item-name" class="block text-sm font-medium text-gray-700">Nama Barang</label><select id="form-item-name" name="itemName" class="form-select"><option value="">-- Pilih Nama Barang --</option></select></div>
-                        <div><label for="date" class="block text-sm font-medium text-gray-700">Tanggal</label><input type="date" id="date" name="date" class="form-input" required></div>
-                        <div><label for="invoice" class="block text-sm font-medium text-gray-700">Invoice/SJ</label><input type="text" id="invoice" name="invoice" class="form-input" placeholder="Nomor Invoice/Surat Jalan"></div>
-                        <div><label for="customerName" class="block text-sm font-medium text-gray-700">Nama Customer</label><input type="text" id="customerName" name="customerName" class="form-input" placeholder="Nama Customer"></div>
-                        <div><label for="description" class="block text-sm font-medium text-gray-700">Keterangan</label><input type="text" id="description" name="description" class="form-input" placeholder="Opsional"></div>
-                        <div><label for="type" class="block text-sm font-medium text-gray-700">Tipe</label><select id="type" name="type" class="form-select"><option value="masuk">Barang Masuk</option><option value="keluar">Barang Keluar</option></select></div>
-                        <div><label for="quantity" class="block text-sm font-medium text-gray-700">Jumlah</label><input type="number" id="quantity" name="quantity" class="form-input" placeholder="0" required min="1"></div>
-                        <button type="submit" class="btn btn-primary w-full">Tambah Transaksi</button>
-                    </form>
-                </section>
-                <section class="lg:col-span-2 card p-6">
-                    <h2 class="text-xl font-bold mb-4">Grafik Stok</h2><div class="chart-container"><canvas id="stock-chart"></canvas></div>
-                </section>
+      {/* Modal Tool Penawaran */}
+      {isModalOpen && selectedLead && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-md" onClick={() => setIsModalOpen(false)}></div>
+          <div className="relative bg-white w-full max-w-7xl rounded-[3rem] shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-300 max-h-[95vh] flex flex-col">
+            <div className="bg-gradient-to-r from-blue-700 to-indigo-800 p-8 text-white shrink-0 flex justify-between items-start">
+              <div><h2 className="text-3xl font-black tracking-tight leading-tight">{selectedLead.company}</h2><p className="text-blue-200 text-xs font-bold uppercase tracking-widest flex items-center gap-2"><MapPin size={14}/> {selectedLead.city}</p></div>
+              <button onClick={() => setIsModalOpen(false)} className="bg-white/10 hover:bg-white/20 p-3 rounded-2xl transition-all"><X size={24} /></button>
             </div>
             
-            <section class="card p-6">
-                <div class="flex flex-wrap justify-between items-center gap-4 mb-4">
-                    <h2 class="text-xl font-bold">Riwayat Transaksi Barang Terpilih</h2>
-                    <div class="flex flex-wrap items-center gap-4">
-                        <button id="print-history-btn" class="btn btn-secondary">Cetak Riwayat Barang</button>
-                        <button id="print-summary-btn" class="btn btn-primary">Cetak Sisa Stok</button>
+            <div className="p-8 grid grid-cols-1 lg:grid-cols-12 gap-8 overflow-y-auto">
+              <div className="lg:col-span-5 space-y-8">
+                <div><h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Pilih Kategori Produk (Multi-Klik)</h4><div className="grid grid-cols-2 sm:grid-cols-3 gap-2">{categories.map(cat => (<button key={cat} onClick={() => { const exists = quoteConfig.selectedCategories.includes(cat); const next = exists ? (quoteConfig.selectedCategories.length > 1 ? quoteConfig.selectedCategories.filter(c => c !== cat) : quoteConfig.selectedCategories) : [...quoteConfig.selectedCategories, cat]; setQuoteConfig({...quoteConfig, selectedCategories: next}); }} className={`py-3.5 px-1 rounded-xl text-[9px] font-black transition-all border-2 ${quoteConfig.selectedCategories.includes(cat) ? 'bg-blue-600 text-white border-blue-600 shadow-xl' : 'bg-white text-slate-400 border-slate-100 hover:border-blue-100'}`}>{quoteConfig.selectedCategories.includes(cat) && <Check size={10} className="inline mr-1"/>}{cat}</button>))}</div></div>
+                <div className="flex flex-col gap-6 bg-slate-50 p-8 rounded-[2.5rem] border border-slate-200"><h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Grup Harga</h4><div className="grid grid-cols-3 gap-2">{['ISP', 'MSRP', 'Special'].map(group => (<button key={group} onClick={() => setQuoteConfig({...quoteConfig, priceGroup: group})} className={`py-4 rounded-2xl text-[10px] font-black transition-all shadow-sm ${quoteConfig.priceGroup === group ? 'bg-blue-600 text-white shadow-blue-500/20' : 'bg-white text-slate-400 border border-slate-100'}`}>{group}</button>))}</div></div>
+                <div className="grid grid-cols-2 gap-4"><button onClick={() => window.open(`https://wa.me/${selectedLead.phone?.replace(/\D/g, '')}?text=${encodeURIComponent(getRawWAMessage(selectedLead))}`, '_blank')} className="bg-emerald-600 text-white py-4 rounded-[2.2rem] font-black text-xs uppercase tracking-widest hover:bg-emerald-700 transition-all flex items-center justify-center gap-2 shadow-2xl active:scale-95"><MessageCircle size={18}/> WhatsApp</button><button onClick={() => generatePDF(selectedLead)} disabled={!libsReady} className={`py-4 rounded-[2.2rem] font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 shadow-2xl active:scale-95 ${libsReady ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-600/20' : 'bg-slate-300 text-slate-500'}`}><Download size={18}/> {libsReady ? 'Unduh PDF' : 'Memuat...'}</button></div>
+              </div>
+
+              <div className="lg:col-span-7 space-y-6">
+                <div className="flex justify-between items-center px-2"><h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Daftar Produk Terpilih (Semua Muncul)</h4></div>
+                <div className="bg-white rounded-[2.5rem] border-2 border-slate-100 overflow-hidden shadow-inner max-h-[350px] overflow-y-auto divide-y divide-slate-100">
+                  {quoteItems.length > 0 ? quoteItems.map((item) => (
+                    <div key={item.id} className="p-5 hover:bg-slate-50 transition-colors group flex items-center justify-between">
+                      <div className="flex-1 pr-4"><p className="text-[11px] font-bold text-slate-700 leading-tight">{item.name}</p><p className="text-[8px] font-black text-blue-400 uppercase mt-1">@ {formatIDR(item.priceIncludingTax)}</p></div>
+                      <div className="flex items-center gap-3">
+                         <div className="flex items-center bg-slate-100 rounded-xl p-1 shadow-inner border border-slate-200">
+                            <button onClick={() => setQuoteItems(prev => prev.map(i => i.id === item.id ? {...i, qty: Math.max(1, i.qty - 1)} : i))} className="p-1 text-slate-400 hover:text-blue-600"><MinusCircle size={16}/></button>
+                            <span className="text-xs font-black px-2 w-8 text-center">{item.qty}</span>
+                            <button onClick={() => setQuoteItems(prev => prev.map(i => i.id === item.id ? {...i, qty: i.qty + 1} : i))} className="p-1 text-slate-400 hover:text-blue-600"><Plus size={16}/></button>
+                         </div>
+                         <button onClick={() => setQuoteItems(prev => prev.filter(i => i.id !== item.id))} className="text-red-300 hover:text-red-600 p-2 transition-colors"><Trash2 size={18}/></button>
+                      </div>
                     </div>
+                  )) : (
+                    <div className="p-20 text-center flex flex-col items-center gap-3 opacity-20"><AlertCircle size={48}/><p className="text-xs font-black uppercase tracking-widest">Silakan Pilih Kategori</p></div>
+                  )}
                 </div>
-                <div class="overflow-x-auto"><table class="w-full text-sm text-left text-gray-500"><thead class="text-xs text-gray-700 uppercase bg-gray-50"><tr><th scope="col" class="py-3 px-6">Tanggal</th><th scope="col" class="py-3 px-6">Invoice/SJ</th><th scope="col" class="py-3 px-6">Customer</th><th scope="col" class="py-3 px-6">Keterangan</th><th scope="col" class="py-3 px-6">Masuk</th><th scope="col" class="py-3 px-6">Keluar</th><th scope="col" class="py-3 px-6">Saldo</th><th scope="col" class="py-3 px-6">Aksi</th></tr></thead><tbody id="transaction-table-body"></tbody></table></div>
-            </section>
-        </main>
-    </div>
-
-    <!-- Modals -->
-    <div id="import-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-75 z-50 flex items-center justify-center p-4">
-        <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl p-6">
-            <h3 class="text-lg font-medium text-gray-900 mb-4">Impor Daftar Barang dari Excel</h3>
-            <p class="text-sm text-gray-600 mb-2">Salin 2 kolom (Kolom A: Kategori, Kolom B: Nama Barang) dari file Excel Anda, lalu tempel di bawah ini.</p>
-            <p class="text-xs text-gray-500 mb-4">Catatan: Proses ini akan menimpa daftar barang yang ada.</p>
-            <form id="import-form">
-                <textarea id="import-textarea" rows="10" class="form-input w-full" placeholder="Tempel data dari Excel di sini..."></textarea>
-                <div class="flex justify-end items-center gap-4 mt-4">
-                    <span id="import-status" class="text-sm"></span>
-                    <button type="button" id="cancel-import-btn" class="btn btn-secondary">Batal</button>
-                    <button type="submit" class="btn btn-primary">Impor Data</button>
+                <div className="bg-slate-50 p-8 rounded-[3rem] border-2 border-dashed border-slate-200 grid grid-cols-2 gap-4 shadow-sm">
+                   <div className="space-y-1"><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Rincian Faktur</p><div className="text-xs font-bold text-slate-600">Subtotal (Dasar): {formatIDR(breakdown.subtotalBase)}</div><div className="text-xs font-bold text-blue-600">PPN (11%): {formatIDR(breakdown.ppnValue)}</div></div>
+                   <div className="flex flex-col justify-center items-end border-l-2 border-slate-200 pl-4"><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Grand Total</p><div className="text-2xl font-black text-slate-900">{formatIDR(breakdown.totalWithTax)}</div></div>
                 </div>
-            </form>
+              </div>
+            </div>
+            <div className="p-6 bg-slate-50 text-center border-t border-slate-100 shrink-0"><p className="text-[9px] font-black text-slate-400 tracking-[0.5em] uppercase italic">{companyName} — Official Dealer 2025</p></div>
+          </div>
         </div>
+      )}
     </div>
+  );
+};
 
-    <div id="edit-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 z-50 flex items-center justify-center p-4">
-        <div class="relative bg-white rounded-lg shadow-xl w-full max-w-md p-6">
-            <h3 class="text-lg font-medium text-gray-900 mb-4">Edit Transaksi</h3>
-            <form id="edit-form" class="space-y-4">
-                <input type="hidden" name="id">
-                <div><label class="block text-sm">Tanggal</label><input type="date" name="date" class="form-input" required></div>
-                <div><label class="block text-sm">Nama Barang</label><select name="itemName" class="form-select" disabled></select></div>
-                <div><label class="block text-sm">Invoice/SJ</label><input type="text" name="invoice" class="form-input"></div>
-                <div><label class="block text-sm">Nama Customer</label><input type="text" name="customerName" class="form-input"></div>
-                <div><label class="block text-sm">Keterangan</label><input type="text" name="description" class="form-input"></div>
-                <div><label class="block text-sm">Tipe</label><select name="type" class="form-select"><option value="masuk">Barang Masuk</option><option value="keluar">Barang Keluar</option></select></div>
-                <div><label class="block text-sm">Jumlah</label><input type="number" name="quantity" class="form-input" required min="1"></div>
-                <div class="flex justify-end gap-3 pt-4"><button type="button" id="cancel-edit-btn" class="btn btn-secondary">Batal</button><button type="submit" class="btn btn-primary">Simpan</button></div>
-            </form>
-        </div>
-    </div>
-    <div id="delete-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 z-50 flex items-center justify-center p-4">
-        <div class="relative bg-white rounded-lg shadow-xl w-full max-w-sm p-6">
-            <h3 class="text-lg font-medium text-gray-900">Konfirmasi Hapus</h3><p class="mt-2 text-sm text-gray-600">Apakah Anda yakin ingin menghapus transaksi ini?</p><div class="flex justify-end gap-3 pt-4 mt-4"><button type="button" id="cancel-delete-btn" class="btn btn-secondary">Batal</button><button type="button" id="confirm-delete-btn" class="btn btn-danger">Ya, Hapus</button></div>
-        </div>
-    </div>
-</body>
-</html>
+export default App;
