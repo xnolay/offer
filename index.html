@@ -55,7 +55,7 @@
                 style: 'currency', currency: 'IDR', maximumFractionDigits: 0 
             }).format(val);
 
-            // --- FUNGSI TERBILANG ---
+            // Fungsi Terbilang Otomatis
             const terbilang = (n) => {
                 const num = ["", "Satu", "Dua", "Tiga", "Empat", "Lima", "Enam", "Tujuh", "Delapan", "Sembilan", "Sepuluh", "Sebelas"];
                 if (n < 12) return " " + num[n];
@@ -70,6 +70,7 @@
                 return "";
             };
 
+            // Handler CSV Harga
             const handlePriceUpload = (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
@@ -90,10 +91,12 @@
                         return { id: i + Date.now(), category: cat, name, isp };
                     }).filter(x => x !== null);
                     setMasterPrices(parsed);
+                    alert("List harga diperbarui!");
                 };
                 reader.readAsText(file);
             };
 
+            // Handler CSV Customer
             const handleLeadsUpload = (e) => {
                 const file = e.target.files[0];
                 const reader = new FileReader();
@@ -110,6 +113,7 @@
                 reader.readAsText(file);
             };
 
+            // FUNGSI UNDUH PDF (PRESISI & ANTI-TERPOTONG)
             const downloadPDF = () => {
                 const { jsPDF } = window.jspdf;
                 const doc = new jsPDF('p', 'mm', 'a4');
@@ -130,7 +134,7 @@
                 doc.setDrawColor(0, 51, 153); doc.setLineWidth(0.8); doc.line(14, 28, 196, 28);
                 doc.setLineWidth(0.2); doc.line(14, 29.5, 196, 29.5);
 
-                // Detail Surat
+                // Info Customer
                 doc.setFontSize(11); doc.setTextColor(0); doc.setFont("helvetica", "bold");
                 doc.text("SURAT PENAWARAN HARGA", 105, 42, { align: "center" });
                 doc.setFontSize(9); doc.setFont("helvetica", "normal");
@@ -141,14 +145,19 @@
                 doc.text(`Telp: ${selectedLead.phone}`, 14, 80);
                 doc.text("Dengan hormat, bersama ini kami sampaikan penawaran harga eHose Fiber Cable sebagai berikut:", 14, 90);
 
-                // Tabel
+                // Data Tabel & Pajak
                 const tableBody = quoteItems.map((item, i) => [
-                    i + 1, item.name, `${item.qty} Unit`, formatIDR(item.isp / 1.11), formatIDR((item.isp / 1.11) * item.qty)
+                    i + 1, 
+                    item.name, 
+                    `${item.qty} Unit`, 
+                    formatIDR(item.isp / 1.11), 
+                    formatIDR((item.isp / 1.11) * item.qty)
                 ]);
                 const totalWithTax = quoteItems.reduce((a, b) => a + (b.isp * b.qty), 0);
                 const subtotal = totalWithTax / 1.11;
                 const ppnValue = totalWithTax - subtotal;
 
+                // EKSEKUSI TABEL DENGAN LEBAR KOLOM TETAP (SUPAYA TIDAK TERPOTONG)
                 doc.autoTable({
                     startY: 95,
                     head: [['No', 'Deskripsi Produk', 'Qty', 'Harga Dasar', 'Total']],
@@ -158,25 +167,25 @@
                         ['', '', '', 'PPN 11%', formatIDR(ppnValue)],
                         ['', '', '', 'GRAND TOTAL', formatIDR(totalWithTax)]
                     ],
-                    styles: { fontSize: 8, cellPadding: 3 },
-                    headStyles: { fillColor: [0, 51, 153], halign: 'center' },
+                    styles: { fontSize: 7.5, cellPadding: 2, overflow: 'linebreak' },
+                    headStyles: { fillColor: [0, 51, 153], halign: 'center', fontSize: 8 },
                     columnStyles: { 
-                        0: { halign: 'center', cellWidth: 10 },
-                        1: { cellWidth: 'auto' },
-                        2: { halign: 'center', cellWidth: 20 },
-                        3: { halign: 'right', cellWidth: 35 },
-                        4: { halign: 'right', cellWidth: 35 }
-                    ],
-                    footStyles: { fillColor: [245, 245, 245], textColor: [0], fontStyle: 'bold' },
+                        0: { halign: 'center', cellWidth: 8 }, // No
+                        1: { cellWidth: 'auto' },               // Deskripsi
+                        2: { halign: 'center', cellWidth: 18 }, // Qty
+                        3: { halign: 'right', cellWidth: 38 },  // Harga Dasar (Diperlebar)
+                        4: { halign: 'right', cellWidth: 38 }   // Total (Diperlebar untuk 9 digit)
+                    },
+                    footStyles: { fillColor: [245, 245, 245], textColor: [0], fontStyle: 'bold', fontSize: 8.5 },
                     theme: 'grid'
                 });
 
-                // Terbilang
+                // Baris Terbilang
                 const finalY = doc.lastAutoTable.finalY + 10;
                 doc.setFont("helvetica", "italic"); doc.setFontSize(9);
                 doc.text(`Terbilang: ${terbilang(Math.round(totalWithTax))} Rupiah`, 14, finalY, { maxWidth: 180 });
 
-                // Penutup
+                // Tanda Tangan
                 doc.setFont("helvetica", "normal");
                 doc.text("Hormat kami,", 150, finalY + 15);
                 doc.setFont("helvetica", "bold"); doc.setTextColor(0, 51, 153);
@@ -225,12 +234,12 @@
                                 </div>
                                 <div className="bg-white rounded-[2rem] shadow-sm border overflow-hidden">
                                     <table className="w-full text-left"><thead className="bg-slate-50 border-b text-[10px] font-black text-slate-400 uppercase tracking-widest"><tr><th className="p-6">Produk</th><th className="p-6 text-right">Harga (Inc PPN)</th></tr></thead>
-                                    <tbody className="divide-y">{masterPrices.map(item => (<tr key={item.id} className="hover:bg-slate-50"><td className="p-6 text-xs font-bold text-slate-700">{item.name}</td><td className="p-6 text-right font-black text-blue-600 text-sm">{formatIDR(item.isp)}</td></tr>))}</tbody></table>
+                                    <tbody className="divide-y">{masterPrices.map(item => (<tr key={item.id} className="hover:bg-blue-50"><td className="p-6 text-xs font-bold text-slate-700">{item.name}</td><td className="p-6 text-right font-black text-blue-600 text-sm">{formatIDR(item.isp)}</td></tr>))}</tbody></table>
                                 </div>
                             </div>
                         ) : (
                             <div className="space-y-6">
-                                <div className="bg-blue-600 p-8 rounded-[2rem] text-white flex justify-between items-center shadow-xl">
+                                <div className="bg-blue-600 p-8 rounded-[2rem] text-white flex justify-between items-center shadow-xl shadow-blue-100">
                                     <div><h2 className="text-2xl font-black mb-4 leading-none tracking-tight">Portal Sales</h2>
                                     <label className="bg-white text-blue-600 px-6 py-3 rounded-xl text-[10px] font-black cursor-pointer inline-block">
                                         IMPORT DATA APJII <input type="file" className="hidden" accept=".csv" onChange={handleLeadsUpload} />
@@ -244,7 +253,7 @@
                                 </div>
                                 <div className="bg-white rounded-[2.5rem] shadow-sm border overflow-hidden">
                                     <table className="w-full text-left"><thead className="bg-slate-50 border-b text-[10px] font-black text-slate-400 uppercase tracking-widest"><tr><th className="p-6">Nama Perusahaan</th><th className="p-6">Regional</th><th className="p-6 text-right">Aksi</th></tr></thead>
-                                    <tbody className="divide-y">{filteredLeads.map(lead => (<tr key={lead.id} className="hover:bg-slate-50"><td className="p-6 font-bold text-sm text-slate-800">{lead.company}</td><td className="p-6 text-[10px] font-bold text-slate-500 uppercase">{lead.city}</td><td className="p-6 text-right"><button onClick={() => { setSelectedLead(lead); setIsModalOpen(true); }} className="bg-slate-900 text-white px-6 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-blue-600 transition-all">Penawaran</button></td></tr>))}</tbody></table>
+                                    <tbody className="divide-y">{filteredLeads.map(lead => (<tr key={lead.id} className="hover:bg-blue-50"><td className="p-6 font-bold text-sm text-slate-800">{lead.company}</td><td className="p-6 text-[10px] font-bold text-slate-500 uppercase">{lead.city}</td><td className="p-6 text-right"><button onClick={() => { setSelectedLead(lead); setIsModalOpen(true); }} className="bg-slate-900 text-white px-6 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-blue-600 transition-all">Penawaran</button></td></tr>))}</tbody></table>
                                 </div>
                             </div>
                         )}
@@ -275,7 +284,7 @@
                                                             <span className="text-xs font-black w-6 text-center">{item.qty}</span>
                                                             <button onClick={() => setQuoteItems(q => q.map(it => it.id === item.id ? {...it, qty: it.qty + 1} : it))} className="p-1 text-slate-300 hover:text-blue-600"><i data-lucide="plus-circle" size={16}></i></button>
                                                         </div>
-                                                        <button onClick={() => setQuoteItems(prev => prev.filter(it => it.id !== item.id))} className="text-red-300 hover:text-red-500 transition-colors"><i data-lucide="trash-2" size={18}></i></button>
+                                                        <button onClick={() => setQuoteItems(prev => prev.filter(it => it.id !== item.id))} className="text-red-400 hover:text-red-500 transition-colors"><i data-lucide="trash-2" size={18}></i></button>
                                                     </div>
                                                 </div>
                                             ))}
