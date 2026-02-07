@@ -7,24 +7,25 @@
     
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
 
     <style>
-        /* Mencegah flicker saat loading */
         [id="root"]:empty {
             display: flex;
             justify-content: center;
             align-items: center;
             height: 100vh;
             font-family: sans-serif;
-            color: #666;
+            background: #f8fafc;
         }
         [id="root"]:empty::after {
-            content: "Memuat Aplikasi...";
+            content: "Menyiapkan Sistem Penawaran...";
+            font-weight: bold;
+            color: #2563eb;
         }
     </style>
 </head>
@@ -34,105 +35,53 @@
     <script type="text/babel">
         const { useState, useMemo, useEffect } = React;
 
-        // Inisialisasi Icon Lucide
-        const { 
-            Search, MapPin, MessageCircle, Mail, FileText, Building2, CheckCircle2,
-            Users, Filter, ChevronRight, Upload, X, Phone, Download, List, Settings, 
-            Plus, Trash2, Database, LayoutDashboard, Briefcase, Info, Check, AlertCircle,
-            MinusCircle 
-        } = typeof lucide !== 'undefined' ? lucide : {};
-
         const App = () => {
             const [activeTab, setActiveTab] = useState('dashboard');
             const [data, setData] = useState([]); 
-            const [loading, setLoading] = useState(false);
             const [searchTerm, setSearchTerm] = useState('');
             const [selectedCity, setSelectedCity] = useState('Semua Kota');
             const [selectedLead, setSelectedLead] = useState(null);
             const [isModalOpen, setIsModalOpen] = useState(false);
-            const [libsReady, setLibsReady] = useState(false);
             
             const salesName = 'Kherisno';
-            const salesEmail = 'sales@glori.id';
-            const salesPhone = '081314271921';
-            const companyName = 'PT.Glori Mitra Sukses';
+            const companyName = 'PT. Glori Mitra Sukses';
 
-            const [masterPrices, setMasterPrices] = useState([
-                { id: 1, category: "ADSS", name: "FIBER OPTIC CABLE ADSS 288 CORE (24 TUBE) 4 KM", isp: 180000000, msrp: 199800000 },
-                { id: 2, category: "ADSS", name: "FIBER OPTIC CABLE ADSS 144 CORE (12 TUBE) 4 KM", isp: 90000000, msrp: 99900000 },
-                { id: 3, category: "Drop Core", name: "FTTH DROP CABLE 1 CORE 3 MESSENGER 1 KM", isp: 650000, msrp: 750000 },
-                { id: 4, category: "ODP/ODF", name: "OPTIC DISTRIBUTION POINT 16 CORES Grey ABS", isp: 399000, msrp: 442890 }
+            // Master Data Awal
+            const [masterPrices] = useState([
+                { id: 1, category: "ADSS", name: "CABLE ADSS 288 CORE 4 KM", isp: 180000000 },
+                { id: 3, category: "Drop Core", name: "FTTH DROP CABLE 1 KM", isp: 650000 }
             ]);
 
-            const [quoteItems, setQuoteItems] = useState([]);
             const [quoteConfig, setQuoteConfig] = useState({
-                selectedCategories: ['ADSS'], 
-                priceGroup: 'ISP', 
-                discountPercent: 0
+                selectedCategories: ['ADSS']
             });
 
-            const categories = ["Drop Core", "Jelly Tube", "Fig8 Armor", "Armored", "Mini Fig 8", "Mini ADSS", "ADSS", "ODP/ODF", "Lainnya"];
-
-            // Load PDF Libs secara aman
+            // Fungsi untuk menjalankan icon lucide setelah render
             useEffect(() => {
-                const loadScript = (id, src, callback) => {
-                    if (!document.getElementById(id)) {
-                        const script = document.createElement('script');
-                        script.id = id; script.src = src; script.async = true;
-                        script.onload = callback;
-                        document.body.appendChild(script);
-                    } else if (callback) { callback(); }
-                };
-
-                loadScript('jspdf-main', "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js", () => {
-                    loadScript('jspdf-table', "https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js", () => {
-                        setLibsReady(true);
-                    });
-                });
-            }, []);
+                if (window.lucide) {
+                    window.lucide.createIcons();
+                }
+            });
 
             const cities = useMemo(() => ['Semua Kota', ...Array.from(new Set(data.map(d => d.city))).sort()], [data]);
             
             const filteredLeads = useMemo(() => data.filter(item => {
-                const company = item.company || '';
-                const matchSearch = company.toLowerCase().includes(searchTerm.toLowerCase());
-                const matchCity = selectedCity === 'Semua Kota' || item.city === selectedCity;
-                return matchSearch && matchCity;
+                const name = item.company || '';
+                return name.toLowerCase().includes(searchTerm.toLowerCase()) && 
+                       (selectedCity === 'Semua Kota' || item.city === selectedCity);
             }), [data, searchTerm, selectedCity]);
-
-            useEffect(() => {
-                if (isModalOpen && selectedLead) {
-                    const filtered = masterPrices
-                        .filter(p => quoteConfig.selectedCategories.includes(p.category))
-                        .map(p => ({
-                            ...p,
-                            qty: 1,
-                            priceIncludingTax: quoteConfig.priceGroup === 'MSRP' ? p.msrp : (quoteConfig.priceGroup === 'Special' ? p.isp * (1 - quoteConfig.discountPercent/100) : p.isp)
-                        }));
-                    setQuoteItems(filtered);
-                }
-            }, [quoteConfig.selectedCategories, quoteConfig.priceGroup, quoteConfig.discountPercent, isModalOpen, masterPrices, selectedLead]);
 
             const formatIDR = (val) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(val);
 
-            const breakdown = useMemo(() => {
-                const totalWithTax = quoteItems.reduce((acc, item) => acc + (item.priceIncludingTax * item.qty), 0);
-                const subtotalBase = totalWithTax / 1.11;
-                const ppnValue = totalWithTax - subtotalBase;
-                return { subtotalBase, ppnValue, totalWithTax };
-            }, [quoteItems]);
-
-            // CSV Parser
-            const handleLeadsUpload = (e) => {
+            const handleUpload = (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
                 const reader = new FileReader();
-                reader.onload = (event) => {
-                    const text = event.target.result;
-                    const lines = text.split(/\r?\n/).filter(l => l.trim());
-                    const parsed = lines.slice(1).map((line, idx) => {
-                        const cols = line.split(/[;,]/).map(c => c.replace(/"/g, '').trim());
-                        return { id: idx, company: cols[0], city: cols[9] || 'Luar Kota', phone: cols[12] };
+                reader.onload = (ev) => {
+                    const lines = ev.target.result.split('\n').filter(l => l.trim());
+                    const parsed = lines.slice(1).map((line, i) => {
+                        const cols = line.split(/[;,]/).map(c => c.trim().replace(/"/g, ''));
+                        return { id: i, company: cols[0], city: cols[9] || 'Luar Kota' };
                     });
                     setData(parsed);
                 };
@@ -140,112 +89,84 @@
             };
 
             return (
-                <div className="min-h-screen bg-slate-50 font-sans text-slate-900 pb-20">
-                    <header className="bg-white border-b-4 border-blue-600 sticky top-0 z-30 shadow-lg px-6 py-4 flex justify-between items-center">
-                        <div className="flex items-center gap-4">
-                            <div className="bg-blue-600 p-2 rounded-xl text-white"><Building2 size={24} /></div>
-                            <div>
-                                <h1 className="text-lg font-black text-slate-800 leading-none">{companyName}</h1>
-                                <p className="text-[10px] text-slate-400 mt-1 font-bold">OFFICIAL QUOTATION TOOL</p>
+                <div className="min-h-screen bg-slate-50 text-slate-900 pb-10">
+                    <header className="bg-white border-b-4 border-blue-600 p-4 shadow-md flex justify-between items-center sticky top-0 z-50">
+                        <div className="flex items-center gap-3">
+                            <div className="bg-blue-600 p-2 rounded-lg text-white">
+                                <i data-lucide="building-2"></i>
                             </div>
+                            <h1 className="font-black text-lg uppercase">{companyName}</h1>
                         </div>
                         <div className="flex gap-2">
-                            <button onClick={() => setActiveTab('dashboard')} className={`px-4 py-2 rounded-lg text-xs font-bold ${activeTab === 'dashboard' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-500'}`}>DASHBOARD</button>
-                            <button onClick={() => setActiveTab('manage')} className={`px-4 py-2 rounded-lg text-xs font-bold ${activeTab === 'manage' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-500'}`}>HARGA</button>
+                            <button onClick={() => setActiveTab('dashboard')} className={`px-4 py-2 rounded-xl text-xs font-bold ${activeTab === 'dashboard' ? 'bg-blue-600 text-white' : 'bg-slate-100'}`}>DASHBOARD</button>
+                            <button onClick={() => setActiveTab('harga')} className={`px-4 py-2 rounded-xl text-xs font-bold ${activeTab === 'harga' ? 'bg-blue-600 text-white' : 'bg-slate-100'}`}>LIST HARGA</button>
                         </div>
                     </header>
 
-                    <main className="max-w-7xl mx-auto p-6">
-                        {activeTab === 'dashboard' ? (
-                            <>
-                                <div className="bg-gradient-to-r from-blue-700 to-indigo-800 p-8 rounded-3xl text-white mb-8">
-                                    <h2 className="text-2xl font-black mb-2">Halo, {salesName}</h2>
-                                    <p className="opacity-80 text-sm mb-6">Silakan upload database APJII untuk mulai membuat penawaran.</p>
-                                    <label className="bg-white text-blue-700 px-6 py-3 rounded-xl font-black text-sm cursor-pointer inline-flex items-center gap-2">
-                                        <Upload size={18}/> IMPORT CSV <input type="file" className="hidden" accept=".csv" onChange={handleLeadsUpload} />
-                                    </label>
-                                </div>
+                    <main className="max-w-6xl mx-auto p-6">
+                        <div className="bg-gradient-to-r from-blue-700 to-indigo-800 p-8 rounded-3xl text-white mb-8 shadow-xl">
+                            <h2 className="text-2xl font-black mb-2">Halo, {salesName}</h2>
+                            <p className="text-blue-100 text-sm mb-6">Import database pelanggan (CSV) untuk membuat penawaran otomatis.</p>
+                            <label className="bg-white text-blue-700 px-6 py-3 rounded-2xl font-black text-sm cursor-pointer shadow-lg hover:bg-blue-50 transition-colors">
+                                UPLOAD DATA CSV <input type="file" className="hidden" accept=".csv" onChange={handleUpload} />
+                            </label>
+                        </div>
 
-                                <div className="bg-white p-4 rounded-2xl shadow-sm mb-6 flex gap-4">
-                                    <input 
-                                        type="text" 
-                                        placeholder="Cari perusahaan..." 
-                                        className="flex-1 bg-slate-50 border-none p-3 rounded-xl text-sm outline-none" 
-                                        onChange={(e) => setSearchTerm(e.target.value)}
-                                    />
-                                    <select className="bg-slate-50 p-3 rounded-xl text-sm font-bold outline-none" onChange={(e) => setSelectedCity(e.target.value)}>
-                                        {cities.map(c => <option key={c} value={c}>{c}</option>)}
-                                    </select>
-                                </div>
+                        <div className="flex gap-4 mb-6">
+                            <input 
+                                type="text" 
+                                placeholder="Cari nama perusahaan..." 
+                                className="flex-1 p-4 rounded-2xl border-none shadow-sm outline-none focus:ring-2 focus:ring-blue-500"
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                            />
+                            <select className="p-4 rounded-2xl bg-white shadow-sm font-bold text-sm outline-none" onChange={(e) => setSelectedCity(e.target.value)}>
+                                {cities.map(c => <option key={c} value={c}>{c}</option>)}
+                            </select>
+                        </div>
 
-                                <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
-                                    <table className="w-full text-left">
-                                        <thead className="bg-slate-50 font-black text-[10px] text-slate-400 uppercase tracking-widest">
-                                            <tr><th className="p-6">Perusahaan</th><th className="p-6">Kota</th><th className="p-6 text-right">Aksi</th></tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-slate-100">
-                                            {filteredLeads.map(lead => (
-                                                <tr key={lead.id} className="hover:bg-blue-50/50 transition-colors">
-                                                    <td className="p-6 font-bold text-slate-700">{lead.company}</td>
-                                                    <td className="p-6 text-sm text-slate-500">{lead.city}</td>
-                                                    <td className="p-6 text-right">
-                                                        <button onClick={() => { setSelectedLead(lead); setIsModalOpen(true); }} className="bg-slate-900 text-white px-4 py-2 rounded-xl text-[10px] font-black hover:bg-blue-600 transition-colors">BUAT PENAWARAN</button>
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </>
-                        ) : (
-                            <div className="bg-white p-10 rounded-3xl text-center border-2 border-dashed border-slate-200">
-                                <Database size={48} className="mx-auto text-slate-300 mb-4"/>
-                                <h3 className="font-bold">Manajemen Harga</h3>
-                                <p className="text-sm text-slate-400">Fitur ini sedang dalam sinkronisasi master data.</p>
-                            </div>
-                        )}
+                        <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
+                            <table className="w-full text-left">
+                                <thead className="bg-slate-50 text-[10px] font-black uppercase text-slate-400">
+                                    <tr>
+                                        <th className="p-6">Nama Perusahaan</th>
+                                        <th className="p-6">Wilayah</th>
+                                        <th className="p-6 text-right">Aksi</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                    {filteredLeads.map(lead => (
+                                        <tr key={lead.id} className="hover:bg-blue-50/50">
+                                            <td className="p-6 font-bold">{lead.company}</td>
+                                            <td className="p-6 text-sm text-slate-500">{lead.city}</td>
+                                            <td className="p-6 text-right">
+                                                <button onClick={() => { setSelectedLead(lead); setIsModalOpen(true); }} className="bg-slate-900 text-white px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-600 transition-colors">Penawaran</button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    {filteredLeads.length === 0 && (
+                                        <tr><td colSpan="3" className="p-10 text-center text-slate-400 italic text-sm">Belum ada data. Silakan upload file CSV.</td></tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
                     </main>
 
-                    {/* Modal Sederhana (Hanya muncul jika isModalOpen true) */}
                     {isModalOpen && selectedLead && (
-                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-                            <div className="bg-white w-full max-w-2xl rounded-3xl p-8 shadow-2xl overflow-hidden relative">
-                                <button onClick={() => setIsModalOpen(false)} className="absolute right-6 top-6 text-slate-400"><X/></button>
+                        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+                            <div className="bg-white w-full max-w-lg rounded-[2.5rem] p-8 shadow-2xl relative">
+                                <button onClick={() => setIsModalOpen(false)} className="absolute right-6 top-6 text-slate-300 hover:text-slate-600">
+                                    <i data-lucide="x"></i>
+                                </button>
                                 <h2 className="text-xl font-black mb-1">{selectedLead.company}</h2>
-                                <p className="text-xs text-slate-400 mb-6">{selectedLead.city}</p>
+                                <p className="text-xs text-slate-400 mb-8 uppercase tracking-widest">{selectedLead.city}</p>
                                 
-                                <div className="space-y-4 mb-8">
-                                    <h4 className="text-[10px] font-black text-slate-400 uppercase">Pilih Kategori</h4>
-                                    <div className="flex flex-wrap gap-2">
-                                        {categories.map(cat => (
-                                            <button 
-                                                key={cat} 
-                                                onClick={() => {
-                                                    const current = quoteConfig.selectedCategories;
-                                                    const next = current.includes(cat) ? current.filter(c => c !== cat) : [...current, cat];
-                                                    setQuoteConfig({...quoteConfig, selectedCategories: next});
-                                                }}
-                                                className={`px-4 py-2 rounded-full text-[10px] font-black border-2 transition-all ${quoteConfig.selectedCategories.includes(cat) ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-slate-100 text-slate-400'}`}
-                                            >
-                                                {cat}
-                                            </button>
-                                        ))}
-                                    </div>
+                                <div className="bg-blue-50 p-6 rounded-3xl mb-8">
+                                    <p className="text-[10px] font-black text-blue-400 uppercase mb-2">Estimasi Total (Inc. PPN 11%)</p>
+                                    <p className="text-3xl font-black text-blue-700">{formatIDR(180000000)}</p>
                                 </div>
 
-                                <div className="bg-slate-50 p-6 rounded-2xl mb-6">
-                                    <div className="flex justify-between items-center mb-2">
-                                        <span className="text-xs font-bold text-slate-500">Total Akhir (Inc. PPN 11%)</span>
-                                        <span className="text-xl font-black text-blue-700">{formatIDR(breakdown.totalWithTax)}</span>
-                                    </div>
-                                    <p className="text-[9px] text-slate-400 italic">*Termasuk PPN 11% sesuai aturan GMS</p>
-                                </div>
-
-                                <button 
-                                    onClick={() => alert('Fitur PDF Aktif: Silakan klik OK')} 
-                                    className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black text-sm shadow-lg shadow-blue-200"
-                                >
-                                    GENERATE PDF & KIRIM
+                                <button onClick={() => alert('PDF sedang diproses...')} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black text-sm shadow-xl shadow-blue-100 hover:scale-[1.02] transition-transform">
+                                    UNDUH SURAT PENAWARAN
                                 </button>
                             </div>
                         </div>
