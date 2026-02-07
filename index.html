@@ -15,7 +15,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
 
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
         body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
         .custom-scroll::-webkit-scrollbar { width: 5px; }
         .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
@@ -34,8 +34,6 @@
             const [selectedCity, setSelectedCity] = useState('Semua Kota');
             const [isModalOpen, setIsModalOpen] = useState(false);
             const [selectedLead, setSelectedLead] = useState(null);
-            
-            // State untuk cari produk di dalam modal
             const [productSearch, setProductSearch] = useState('');
 
             const salesInfo = {
@@ -57,27 +55,20 @@
                 style: 'currency', currency: 'IDR', maximumFractionDigits: 0 
             }).format(val);
 
-            // Filter Kota
-            const cityOptions = useMemo(() => {
-                const uniqueCities = Array.from(new Set(leads.map(l => l.city))).filter(Boolean);
-                return ['Semua Kota', ...uniqueCities.sort()];
-            }, [leads]);
-
-            // Logic Filter Pelanggan
-            const filteredLeads = useMemo(() => {
-                return leads.filter(lead => {
-                    const matchSearch = lead.company.toLowerCase().includes(searchTerm.toLowerCase());
-                    const matchCity = selectedCity === 'Semua Kota' || lead.city === selectedCity;
-                    return matchSearch && matchCity;
-                });
-            }, [leads, searchTerm, selectedCity]);
-
-            // Logic Filter Produk di Modal
-            const filteredQuoteItems = useMemo(() => {
-                return quoteItems.filter(item => 
-                    item.name.toLowerCase().includes(productSearch.toLowerCase())
-                );
-            }, [quoteItems, productSearch]);
+            // --- FUNGSI TERBILANG ---
+            const terbilang = (n) => {
+                const num = ["", "Satu", "Dua", "Tiga", "Empat", "Lima", "Enam", "Tujuh", "Delapan", "Sembilan", "Sepuluh", "Sebelas"];
+                if (n < 12) return " " + num[n];
+                else if (n < 20) return terbilang(n - 10) + " Belas";
+                else if (n < 100) return terbilang(Math.floor(n / 10)) + " Puluh" + terbilang(n % 10);
+                else if (n < 200) return " Seratus" + terbilang(n - 100);
+                else if (n < 1000) return terbilang(Math.floor(n / 100)) + " Ratus" + terbilang(n % 100);
+                else if (n < 2000) return " Seribu" + terbilang(n - 1000);
+                else if (n < 1000000) return terbilang(Math.floor(n / 1000)) + " Ribu" + terbilang(n % 1000);
+                else if (n < 1000000000) return terbilang(Math.floor(n / 1000000)) + " Juta" + terbilang(n % 1000000);
+                else if (n < 1000000000000) return terbilang(Math.floor(n / 1000000000)) + " Miliar" + terbilang(n % 1000000000);
+                return "";
+            };
 
             const handlePriceUpload = (e) => {
                 const file = e.target.files[0];
@@ -121,43 +112,39 @@
 
             const downloadPDF = () => {
                 const { jsPDF } = window.jspdf;
-                const doc = new jsPDF();
+                const doc = new jsPDF('p', 'mm', 'a4');
                 
+                // Kop Surat
                 doc.setFillColor(0, 51, 153);
                 doc.rect(14, 12, 12, 12, 'F');
                 doc.setTextColor(255, 255, 255); doc.setFontSize(8); doc.text("GMS", 15.5, 20);
-
                 doc.setFontSize(18); doc.setTextColor(0, 51, 153); doc.setFont("helvetica", "bold");
-                doc.text(salesInfo.company, 30, 18);
-                doc.setFontSize(10); doc.text(salesInfo.subCompany, 30, 23);
+                doc.text("PT GLORI", 30, 18);
+                doc.setFontSize(10); doc.text("GMS MITRA SUKSES", 30, 23);
                 
                 const rightX = 196;
                 doc.setTextColor(100); doc.setFontSize(8); doc.setFont("helvetica", "normal");
                 doc.text("(021) 6505001", rightX, 15, { align: "right" });
                 doc.text("sales@glori.id", rightX, 19, { align: "right" });
                 doc.text("Komplek Ruko Artha Center I, Jakarta Barat", rightX, 23, { align: "right" });
-
                 doc.setDrawColor(0, 51, 153); doc.setLineWidth(0.8); doc.line(14, 28, 196, 28);
                 doc.setLineWidth(0.2); doc.line(14, 29.5, 196, 29.5);
 
-                doc.setFontSize(12); doc.setTextColor(0); doc.setFont("helvetica", "bold");
+                // Detail Surat
+                doc.setFontSize(11); doc.setTextColor(0); doc.setFont("helvetica", "bold");
                 doc.text("SURAT PENAWARAN HARGA", 105, 42, { align: "center" });
-                
                 doc.setFontSize(9); doc.setFont("helvetica", "normal");
                 doc.text(`Tanggal: ${new Date().toLocaleDateString('id-ID', { day:'numeric', month:'long', year:'numeric' })}`, 14, 52);
                 doc.text("Kepada Yth:", 14, 62);
                 doc.setFont("helvetica", "bold"); doc.text(selectedLead.company, 14, 67);
-                doc.setFont("helvetica", "normal"); 
-                doc.text(`Alamat: ${selectedLead.address}, ${selectedLead.city}`, 14, 72, { maxWidth: 120 });
+                doc.setFont("helvetica", "normal"); doc.text(`Alamat: ${selectedLead.address}, ${selectedLead.city}`, 14, 72, { maxWidth: 120 });
                 doc.text(`Telp: ${selectedLead.phone}`, 14, 80);
-
                 doc.text("Dengan hormat, bersama ini kami sampaikan penawaran harga eHose Fiber Cable sebagai berikut:", 14, 90);
 
-                const tableBody = quoteItems.map((item, i) => {
-                    const basePrice = item.isp / 1.11;
-                    return [i + 1, item.name, `${item.qty} Unit`, formatIDR(basePrice), formatIDR(basePrice * item.qty)];
-                });
-
+                // Tabel
+                const tableBody = quoteItems.map((item, i) => [
+                    i + 1, item.name, `${item.qty} Unit`, formatIDR(item.isp / 1.11), formatIDR((item.isp / 1.11) * item.qty)
+                ]);
                 const totalWithTax = quoteItems.reduce((a, b) => a + (b.isp * b.qty), 0);
                 const subtotal = totalWithTax / 1.11;
                 const ppnValue = totalWithTax - subtotal;
@@ -167,30 +154,47 @@
                     head: [['No', 'Deskripsi Produk', 'Qty', 'Harga Dasar', 'Total']],
                     body: tableBody,
                     foot: [
-                        ['', '', '', 'SUBTOTAL', formatIDR(subtotal)],
+                        ['', '', '', 'SUBTOTAL (DPP)', formatIDR(subtotal)],
                         ['', '', '', 'PPN 11%', formatIDR(ppnValue)],
                         ['', '', '', 'GRAND TOTAL', formatIDR(totalWithTax)]
                     ],
-                    headStyles: { fillColor: [0, 51, 153] },
+                    styles: { fontSize: 8, cellPadding: 3 },
+                    headStyles: { fillColor: [0, 51, 153], halign: 'center' },
+                    columnStyles: { 
+                        0: { halign: 'center', cellWidth: 10 },
+                        1: { cellWidth: 'auto' },
+                        2: { halign: 'center', cellWidth: 20 },
+                        3: { halign: 'right', cellWidth: 35 },
+                        4: { halign: 'right', cellWidth: 35 }
+                    ],
                     footStyles: { fillColor: [245, 245, 245], textColor: [0], fontStyle: 'bold' },
                     theme: 'grid'
                 });
 
-                const finalY = doc.lastAutoTable.finalY + 20;
-                doc.text("Hormat kami,", 150, finalY);
+                // Terbilang
+                const finalY = doc.lastAutoTable.finalY + 10;
+                doc.setFont("helvetica", "italic"); doc.setFontSize(9);
+                doc.text(`Terbilang: ${terbilang(Math.round(totalWithTax))} Rupiah`, 14, finalY, { maxWidth: 180 });
+
+                // Penutup
+                doc.setFont("helvetica", "normal");
+                doc.text("Hormat kami,", 150, finalY + 15);
                 doc.setFont("helvetica", "bold"); doc.setTextColor(0, 51, 153);
-                doc.text(salesInfo.name, 150, finalY + 20);
+                doc.text(salesInfo.name, 150, finalY + 35);
                 doc.setFontSize(8); doc.setFont("helvetica", "normal"); doc.setTextColor(0);
-                doc.text(`WhatsApp: ${salesInfo.whatsapp}`, 150, finalY + 25);
+                doc.text(`WhatsApp: ${salesInfo.whatsapp}`, 150, finalY + 40);
 
                 doc.save(`Penawaran_${selectedLead.company}.pdf`);
             };
+
+            const cityOptions = useMemo(() => ['Semua Kota', ...Array.from(new Set(leads.map(l => l.city))).filter(Boolean).sort()], [leads]);
+            const filteredLeads = leads.filter(l => l.company.toLowerCase().includes(searchTerm.toLowerCase()) && (selectedCity === 'Semua Kota' || l.city === selectedCity));
+            const filteredProducts = quoteItems.filter(item => item.name.toLowerCase().includes(productSearch.toLowerCase()));
 
             useEffect(() => {
                 if (isModalOpen) {
                     const filtered = masterPrices.filter(p => selectedCategories.includes(p.category));
                     setQuoteItems(filtered.map(p => ({ ...p, qty: 1 })));
-                    setProductSearch(''); // Reset search produk tiap modal buka
                 }
             }, [selectedCategories, isModalOpen, masterPrices]);
 
@@ -199,115 +203,72 @@
                     <header className="bg-white border-b-4 border-blue-600 p-4 shadow-sm flex justify-between items-center sticky top-0 z-50">
                         <div className="flex items-center gap-3">
                             <div className="bg-blue-600 p-2 rounded-xl text-white shadow-lg"><i data-lucide="building-2"></i></div>
-                            <h1 className="font-black text-slate-800 uppercase text-xs md:text-sm">{salesInfo.company} {salesInfo.subCompany}</h1>
+                            <h1 className="font-black text-slate-800 uppercase text-xs md:text-sm">{salesInfo.company}</h1>
                         </div>
                         <nav className="flex bg-slate-100 p-1 rounded-xl">
-                            <button onClick={() => setActiveTab('dashboard')} className={`px-4 py-2 rounded-lg text-[10px] font-black ${activeTab === 'dashboard' ? 'bg-white shadow text-blue-600' : 'text-slate-400'}`}>DASHBOARD</button>
-                            <button onClick={() => setActiveTab('manage')} className={`px-4 py-2 rounded-lg text-[10px] font-black ${activeTab === 'manage' ? 'bg-white shadow text-blue-600' : 'text-slate-400'}`}>LIST HARGA</button>
+                            <button onClick={() => setActiveTab('dashboard')} className={`px-4 py-2 rounded-lg text-[10px] font-black transition-all ${activeTab === 'dashboard' ? 'bg-white shadow text-blue-600' : 'text-slate-400'}`}>DASHBOARD</button>
+                            <button onClick={() => setActiveTab('manage')} className={`px-4 py-2 rounded-lg text-[10px] font-black transition-all ${activeTab === 'manage' ? 'bg-white shadow text-blue-600' : 'text-slate-400'}`}>LIST HARGA</button>
                         </nav>
                     </header>
 
                     <main className="max-w-7xl w-full mx-auto p-6 flex-1">
                         {activeTab === 'manage' ? (
                             <div className="space-y-6">
-                                <div className="bg-slate-900 p-8 rounded-[2rem] text-white flex justify-between items-center relative overflow-hidden shadow-2xl">
-                                    <div className="relative z-10">
+                                <div className="bg-slate-900 p-8 rounded-[2rem] text-white flex justify-between items-center">
+                                    <div className="z-10">
                                         <h3 className="text-xl font-black mb-1">Update Master Harga</h3>
-                                        <label className="bg-blue-600 px-6 py-3 rounded-xl text-[10px] font-black cursor-pointer inline-block mt-4 shadow-lg hover:scale-105 transition-all">
+                                        <label className="bg-blue-600 px-6 py-3 rounded-xl text-[10px] font-black cursor-pointer inline-block mt-4 hover:scale-105 transition-all">
                                             UPLOAD CSV HARGA <input type="file" className="hidden" accept=".csv" onChange={handlePriceUpload} />
                                         </label>
                                     </div>
-                                    <i data-lucide="database" className="opacity-10 absolute -right-4 -bottom-4" size={100}></i>
+                                    <i data-lucide="database" className="opacity-10" size={100}></i>
                                 </div>
                                 <div className="bg-white rounded-[2rem] shadow-sm border overflow-hidden">
-                                    <table className="w-full text-left">
-                                        <thead className="bg-slate-50 border-b text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                            <tr><th className="p-6">Produk</th><th className="p-6 text-right">Harga (Inc PPN)</th></tr>
-                                        </thead>
-                                        <tbody className="divide-y">
-                                            {masterPrices.map(item => (
-                                                <tr key={item.id} className="hover:bg-slate-50 transition-colors"><td className="p-6 text-xs font-bold text-slate-700">{item.name}</td><td className="p-6 text-right font-black text-blue-600">{formatIDR(item.isp)}</td></tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
+                                    <table className="w-full text-left"><thead className="bg-slate-50 border-b text-[10px] font-black text-slate-400 uppercase tracking-widest"><tr><th className="p-6">Produk</th><th className="p-6 text-right">Harga (Inc PPN)</th></tr></thead>
+                                    <tbody className="divide-y">{masterPrices.map(item => (<tr key={item.id} className="hover:bg-slate-50"><td className="p-6 text-xs font-bold text-slate-700">{item.name}</td><td className="p-6 text-right font-black text-blue-600 text-sm">{formatIDR(item.isp)}</td></tr>))}</tbody></table>
                                 </div>
                             </div>
                         ) : (
                             <div className="space-y-6">
-                                <div className="bg-blue-600 p-8 rounded-[2rem] text-white flex justify-between items-center shadow-xl shadow-blue-100">
-                                    <div>
-                                        <h2 className="text-2xl font-black mb-4 leading-none text-white tracking-tight">Portal Sales: {salesInfo.name}</h2>
-                                        <label className="bg-white text-blue-600 px-6 py-3 rounded-xl text-[10px] font-black cursor-pointer inline-block shadow-lg hover:scale-105 transition-all">
-                                            IMPORT DATA APJII <input type="file" className="hidden" accept=".csv" onChange={handleLeadsUpload} />
-                                        </label>
-                                    </div>
+                                <div className="bg-blue-600 p-8 rounded-[2rem] text-white flex justify-between items-center shadow-xl">
+                                    <div><h2 className="text-2xl font-black mb-4 leading-none tracking-tight">Portal Sales</h2>
+                                    <label className="bg-white text-blue-600 px-6 py-3 rounded-xl text-[10px] font-black cursor-pointer inline-block">
+                                        IMPORT DATA APJII <input type="file" className="hidden" accept=".csv" onChange={handleLeadsUpload} />
+                                    </label></div>
                                     <i data-lucide="users" className="opacity-20" size={80}></i>
                                 </div>
-
-                                <div className="bg-white p-5 rounded-[2.2rem] border border-slate-200 shadow-sm flex flex-col md:flex-row gap-4">
-                                    <div className="relative flex-1">
-                                        <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"><i data-lucide="search" style={{width:18, height:18}}></i></div>
-                                        <input type="text" placeholder="Cari Nama Perusahaan..." className="w-full pl-12 pr-6 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold outline-none focus:ring-4 focus:ring-blue-500/10 transition-all" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
-                                    </div>
-                                    <select className="bg-slate-50 border border-slate-200 rounded-2xl px-6 py-3.5 text-sm font-bold outline-none cursor-pointer focus:ring-4 focus:ring-blue-500/10" value={selectedCity} onChange={(e) => setSelectedCity(e.target.value)}>
-                                        {cityOptions.map(city => <option key={city} value={city}>{city}</option>)}
-                                    </select>
+                                <div className="flex flex-col md:flex-row gap-4 bg-white p-5 rounded-[2.2rem] border shadow-sm">
+                                    <div className="relative flex-1"><i data-lucide="search" className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18}></i>
+                                    <input type="text" placeholder="Cari Nama Perusahaan..." className="w-full pl-12 pr-6 py-3.5 bg-slate-50 rounded-2xl text-sm font-bold outline-none" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div>
+                                    <select className="bg-slate-50 px-6 py-3.5 rounded-2xl text-sm font-bold outline-none cursor-pointer" value={selectedCity} onChange={(e) => setSelectedCity(e.target.value)}>{cityOptions.map(c => <option key={c} value={c}>{c}</option>)}</select>
                                 </div>
-
-                                <div className="bg-white rounded-[2rem] shadow-sm border overflow-hidden">
-                                    <table className="w-full text-left">
-                                        <thead className="bg-slate-50 border-b text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                            <tr><th className="p-6">Nama Perusahaan</th><th className="p-6">Kota</th><th className="p-6 text-right">Aksi</th></tr>
-                                        </thead>
-                                        <tbody className="divide-y">
-                                            {filteredLeads.map(lead => (
-                                                <tr key={lead.id} className="hover:bg-slate-50 transition-colors">
-                                                    <td className="p-6 font-bold text-sm text-slate-800">{lead.company}</td>
-                                                    <td className="p-6 text-[10px] text-slate-500 font-bold uppercase"><span className="flex items-center gap-1"><i data-lucide="map-pin" style={{width:12, height:12}}></i> {lead.city}</span></td>
-                                                    <td className="p-6 text-right"><button onClick={() => { setSelectedLead(lead); setIsModalOpen(true); }} className="bg-slate-900 text-white px-6 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-blue-600 transition-all shadow-md">PENAWARAN</button></td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
+                                <div className="bg-white rounded-[2.5rem] shadow-sm border overflow-hidden">
+                                    <table className="w-full text-left"><thead className="bg-slate-50 border-b text-[10px] font-black text-slate-400 uppercase tracking-widest"><tr><th className="p-6">Nama Perusahaan</th><th className="p-6">Regional</th><th className="p-6 text-right">Aksi</th></tr></thead>
+                                    <tbody className="divide-y">{filteredLeads.map(lead => (<tr key={lead.id} className="hover:bg-slate-50"><td className="p-6 font-bold text-sm text-slate-800">{lead.company}</td><td className="p-6 text-[10px] font-bold text-slate-500 uppercase">{lead.city}</td><td className="p-6 text-right"><button onClick={() => { setSelectedLead(lead); setIsModalOpen(true); }} className="bg-slate-900 text-white px-6 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-blue-600 transition-all">Penawaran</button></td></tr>))}</tbody></table>
                                 </div>
                             </div>
                         )}
                     </main>
 
-                    {/* MODAL PENAWARAN (DENGAN CARI PRODUK) */}
                     {isModalOpen && selectedLead && (
                         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm">
-                            <div className="bg-white w-full max-w-5xl rounded-[3rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+                            <div className="bg-white w-full max-w-5xl rounded-[3.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[95vh]">
                                 <div className="p-6 bg-blue-600 text-white flex justify-between items-center">
                                     <h2 className="font-black text-sm uppercase">{selectedLead.company}</h2>
-                                    <button onClick={() => setIsModalOpen(false)} className="text-[10px] font-black uppercase opacity-60 hover:opacity-100 transition-all">Tutup</button>
+                                    <button onClick={() => setIsModalOpen(false)} className="bg-white/20 p-2 rounded-xl hover:bg-white/40 font-black text-[10px] uppercase">Tutup</button>
                                 </div>
                                 <div className="p-8 flex flex-col md:flex-row gap-8 overflow-hidden">
                                     <div className="md:w-64 space-y-6 shrink-0">
-                                        <div>
-                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Cari Produk</p>
-                                            <div className="relative">
-                                                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"><i data-lucide="search" style={{width:14, height:14}}></i></div>
-                                                <input type="text" placeholder="Cari..." className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[11px] font-bold outline-none focus:border-blue-500 transition-all" value={productSearch} onChange={(e) => setProductSearch(e.target.value)} />
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Kategori</p>
-                                            <div className="flex flex-wrap gap-2">
-                                                {categories.map(cat => (
-                                                    <button key={cat} onClick={() => {
-                                                        const next = selectedCategories.includes(cat) ? selectedCategories.filter(c => c !== cat) : [...selectedCategories, cat];
-                                                        setSelectedCategories(next.length ? next : ['ADSS']);
-                                                    }} className={`px-4 py-2 rounded-xl text-[9px] font-black border-2 transition-all ${selectedCategories.includes(cat) ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-slate-100 text-slate-400'}`}>{cat}</button>
-                                                ))}
-                                            </div>
-                                        </div>
+                                        <div><p className="text-[10px] font-black text-slate-400 uppercase mb-3 tracking-widest">Cari Produk</p>
+                                        <input type="text" placeholder="Ketik nama kabel..." className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold outline-none focus:border-blue-500" value={productSearch} onChange={(e) => setProductSearch(e.target.value)} /></div>
+                                        <div><p className="text-[10px] font-black text-slate-400 uppercase mb-3 tracking-widest">Kategori</p>
+                                        <div className="flex flex-wrap gap-2">{categories.map(cat => (<button key={cat} onClick={() => setSelectedCategories(prev => prev.includes(cat) ? (prev.length > 1 ? prev.filter(c => c !== cat) : prev) : [...prev, cat])} className={`px-4 py-2 rounded-xl text-[9px] font-black border-2 transition-all ${selectedCategories.includes(cat) ? 'bg-blue-600 border-blue-600 text-white shadow-md' : 'bg-white border-slate-100 text-slate-400'}`}>{cat}</button>))}</div></div>
                                     </div>
                                     <div className="flex-1 flex flex-col overflow-hidden">
                                         <div className="flex-1 overflow-y-auto custom-scroll space-y-3 pr-2">
-                                            {filteredQuoteItems.map(item => (
-                                                <div key={item.id} className="p-4 bg-slate-50 rounded-2xl flex justify-between items-center border border-slate-100 hover:border-blue-200 transition-all">
-                                                    <div className="flex-1 pr-4"><p className="text-[11px] font-bold text-slate-700 leading-tight">{item.name}</p><p className="text-[10px] font-black text-blue-500 uppercase mt-1">{formatIDR(item.isp)}</p></div>
+                                            {filteredProducts.map(item => (
+                                                <div key={item.id} className="p-4 bg-slate-50 rounded-2xl border flex justify-between items-center hover:border-blue-200 transition-all">
+                                                    <div className="flex-1 pr-4"><p className="text-[11px] font-bold text-slate-700 leading-tight mb-1">{item.name}</p><p className="text-[10px] font-black text-blue-500 uppercase mt-1">{formatIDR(item.isp)}</p></div>
                                                     <div className="flex items-center gap-4">
                                                         <div className="flex items-center bg-white p-1 rounded-xl shadow-sm border">
                                                             <button onClick={() => setQuoteItems(q => q.map(it => it.id === item.id ? {...it, qty: Math.max(1, it.qty - 1)} : it))} className="p-1 text-slate-300 hover:text-blue-600"><i data-lucide="minus-circle" size={16}></i></button>
@@ -318,14 +279,13 @@
                                                     </div>
                                                 </div>
                                             ))}
-                                            {filteredQuoteItems.length === 0 && <div className="p-10 text-center text-slate-400 italic text-xs">Produk tidak ditemukan atau belum pilih kategori.</div>}
                                         </div>
-                                        <div className="mt-6 p-8 bg-blue-50 rounded-[2.5rem] flex flex-col md:flex-row justify-between items-center gap-6">
+                                        <div className="mt-6 p-8 bg-blue-50 rounded-[3rem] border border-blue-100 flex flex-col md:flex-row justify-between items-center gap-6 shadow-inner">
                                             <div className="text-center md:text-left">
-                                                <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Total (Inc. PPN 11%)</p>
+                                                <p className="text-[10px] font-black text-blue-400 uppercase mb-1">Grand Total (Inc. PPN 11%)</p>
                                                 <h3 className="text-2xl font-black text-blue-700">{formatIDR(quoteItems.reduce((a, b) => a + (b.isp * b.qty), 0))}</h3>
                                             </div>
-                                            <button onClick={downloadPDF} className="bg-blue-600 text-white px-10 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl">UNDUH PDF</button>
+                                            <button onClick={downloadPDF} className="bg-blue-600 text-white px-10 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-blue-200 hover:scale-105 active:scale-95 transition-all">UNDUH PDF PENAWARAN</button>
                                         </div>
                                     </div>
                                 </div>
