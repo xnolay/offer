@@ -45,7 +45,7 @@
 
             const formatIDR = (val) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(val);
 
-            // Logika Sinkronisasi Harga saat Pilihan ISP/MSRP Berubah
+            // Update harga saat grup berubah
             useEffect(() => {
                 if (priceGroup !== 'Special') {
                     setQuoteItems(prev => prev.map(item => ({
@@ -71,46 +71,21 @@
 
             const handleLeadsUpload = (e) => {
                 const file = e.target.files[0];
-                if (!file) return;
                 const reader = new FileReader();
                 reader.onload = (ev) => {
                     const rows = parseCSV(ev.target.result);
-                    const parsed = rows.slice(1).map((cols, i) => ({
+                    setLeads(rows.slice(1).map((cols, i) => ({
                         id: i, company: cols[0], address: cols[6], city: cols[9] || 'Luar Kota', phone: cols[12]
-                    }));
-                    setLeads(parsed);
+                    })));
                 };
                 reader.readAsText(file);
-            };
-
-            const handlePriceUpload = (e) => {
-                const file = e.target.files[0];
-                const reader = new FileReader();
-                reader.onload = (ev) => {
-                    const rows = parseCSV(ev.target.result);
-                    const parsed = rows.slice(1).map((cols, i) => {
-                        if (!cols[0]) return null;
-                        const isp = parseInt(cols[1]?.split('.')[0].replace(/[^\d]/g, '')) || 0;
-                        const msrp = cols[2] ? parseInt(cols[2]?.split('.')[0].replace(/[^\d]/g, '')) : isp * 1.11;
-                        return { id: Date.now() + i, name: cols[0], isp, msrp };
-                    }).filter(x => x);
-                    setMasterPrices(parsed);
-                };
-                reader.readAsText(file);
-            };
-
-            const handleAddProduct = (id) => {
-                const p = masterPrices.find(x => x.id === parseInt(id));
-                if (p && !quoteItems.find(q => q.id === p.id)) {
-                    setQuoteItems([...quoteItems, { ...p, qty: 1, currentPrice: priceGroup === 'MSRP' ? p.msrp : p.isp }]);
-                }
             };
 
             const downloadPDF = () => {
                 const { jsPDF } = window.jspdf;
                 const doc = new jsPDF('p', 'mm', 'a4');
                 
-                // Kop Surat Sederhana
+                // Kop Surat GMS Presisi
                 doc.setFillColor(0, 51, 153); doc.rect(14, 12, 12, 12, 'F');
                 doc.setTextColor(255, 255, 255); doc.setFontSize(8); doc.text("GMS", 15.5, 20);
                 doc.setFontSize(18); doc.setTextColor(0, 51, 153); doc.setFont("helvetica", "bold"); doc.text("PT. Glori Mitra Sukses", 30, 21);
@@ -120,17 +95,40 @@
                 doc.setFontSize(9); doc.setFont("helvetica", "normal");
                 doc.text(`Tanggal: ${new Date().toLocaleDateString('id-ID')}`, 14, 52);
                 doc.text(`Kepada Yth: ${selectedLead.company}`, 14, 62);
-                doc.text(`Alamat: ${selectedLead.address}`, 14, 67, { maxWidth: 120 });
+                doc.text(`Alamat: ${selectedLead.address}, ${selectedLead.city}`, 14, 67, { maxWidth: 120 });
+                doc.text("Dengan hormat, bersama ini kami sampaikan penawaran harga eHose Fiber Cable sebagai berikut:", 14, 85);
 
-                const tableBody = quoteItems.map((item, i) => [i + 1, item.name, `${item.qty} Unit`, formatIDR(item.currentPrice / 1.11), formatIDR((item.currentPrice / 1.11) * item.qty)]);
+                const tableBody = quoteItems.map((item, i) => [
+                    i + 1, 
+                    item.name, 
+                    `${item.qty} Unit`, 
+                    formatIDR(Math.round(item.currentPrice / 1.11)), 
+                    formatIDR(Math.round((item.currentPrice / 1.11) * item.qty))
+                ]);
                 const total = quoteItems.reduce((a, b) => a + (b.currentPrice * b.qty), 0);
 
                 doc.autoTable({
-                    startY: 80, head: [['No', 'Produk', 'Qty', 'Harga Dasar', 'Total']], body: tableBody,
+                    startY: 90, 
+                    head: [['No', 'Deskripsi Produk', 'Qty', 'Harga Dasar', 'Total']], 
+                    body: tableBody,
                     foot: [['', '', '', 'GRAND TOTAL', formatIDR(total)]],
-                    headStyles: { fillColor: [0, 51, 153] }, theme: 'grid'
+                    styles: { fontSize: 8, cellPadding: 3, overflow: 'linebreak' },
+                    columnStyles: { 0: { cellWidth: 10 }, 1: { cellWidth: 'auto' }, 2: { halign: 'center', cellWidth: 20 }, 3: { halign: 'right', cellWidth: 35 }, 4: { halign: 'right', cellWidth: 35 } },
+                    headStyles: { fillColor: [0, 51, 153] }, 
+                    theme: 'grid'
                 });
                 doc.save(`Penawaran_${selectedLead.company}.pdf`);
+            };
+
+            const sendWhatsApp = () => {
+                const total = quoteItems.reduce((a, b) => a + (b.currentPrice * b.qty), 0);
+                let message = `Halo *${selectedLead.company}*,\n\nBerikut penawaran harga dari *PT. Glori Mitra Sukses*:\n`;
+                quoteItems.forEach((item, i) => {
+                    message += `${i+1}. ${item.name} (${item.qty} Unit) - ${formatIDR(item.currentPrice)}\n`;
+                });
+                message += `\n*Total Penawaran: ${formatIDR(total)}*\n\nTerima kasih.`;
+                const phone = selectedLead.phone.replace(/[^\d]/g, '');
+                window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank');
             };
 
             const filteredLeads = leads.filter(l => l.company.toLowerCase().includes(searchTerm.toLowerCase()) && (selectedCity === 'Semua Kota' || l.city === selectedCity));
@@ -152,7 +150,7 @@
                         {activeTab === 'dashboard' ? (
                             <div className="space-y-6">
                                 <div className="bg-blue-600 p-8 rounded-[2rem] text-white flex justify-between items-center shadow-xl">
-                                    <div><h2 className="text-2xl font-black mb-4 tracking-tight leading-none">Database Pelanggan</h2>
+                                    <div><h2 className="text-2xl font-black mb-4">Database APJII</h2>
                                     <input type="file" accept=".csv" onChange={handleLeadsUpload} className="text-xs"/></div>
                                     <i data-lucide="users" className="opacity-20" size={80}></i>
                                 </div>
@@ -165,13 +163,8 @@
                                         <tbody className="divide-y">
                                             {filteredLeads.map(l => (
                                                 <tr key={l.id} className="hover:bg-slate-50">
-                                                    <td className="p-6 font-bold">{l.company}</td>
-                                                    <td className="p-6 text-right flex gap-2 justify-end">
-                                                        {l.phone && (
-                                                            <a href={`https://wa.me/${l.phone.replace(/[^\d]/g, '')}`} target="_blank" className="bg-green-500 text-white p-2 rounded-xl flex items-center gap-1 text-[10px] font-bold"><i data-lucide="phone" size={14}></i> WA</a>
-                                                        )}
-                                                        <button onClick={() => { setSelectedLead(l); setIsModalOpen(true); }} className="bg-slate-900 text-white px-6 py-2 rounded-xl text-[10px] font-black uppercase">Penawaran</button>
-                                                    </td>
+                                                    <td className="p-6 font-bold text-slate-800">{l.company}</td>
+                                                    <td className="p-6 text-right"><button onClick={() => { setSelectedLead(l); setIsModalOpen(true); }} className="bg-slate-900 text-white px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest">Penawaran</button></td>
                                                 </tr>
                                             ))}
                                         </tbody>
@@ -179,35 +172,44 @@
                                 </div>
                             </div>
                         ) : (
-                            <div className="bg-white p-8 rounded-[2rem] border">
+                            <div className="bg-white p-8 rounded-[2rem] border shadow-sm">
                                 <h3 className="text-xl font-black mb-4">Master Harga</h3>
-                                <input type="file" accept=".csv" onChange={handlePriceUpload} className="mb-6 block text-xs"/>
+                                <input type="file" accept=".csv" onChange={(e) => {
+                                    const reader = new FileReader();
+                                    reader.onload = (ev) => {
+                                        const rows = parseCSV(ev.target.result);
+                                        setMasterPrices(rows.slice(1).map((c, i) => ({ id: Date.now()+i, name: c[0], isp: parseInt(c[1]?.replace(/[^\d]/g, '')), msrp: parseInt(c[2]?.replace(/[^\d]/g, '')) })).filter(x => x.name));
+                                    };
+                                    reader.readAsText(e.target.files[0]);
+                                }} className="mb-6 block text-xs"/>
                                 <table className="w-full text-left divide-y">
-                                    <tbody className="divide-y">{masterPrices.map(p => (<tr key={p.id}><td className="p-4 text-sm">{p.name}</td><td className="p-4 text-right text-blue-600 font-bold">{formatIDR(p.isp)}</td></tr>))}</tbody>
+                                    <tbody className="divide-y">{masterPrices.map(p => (<tr key={p.id}><td className="p-4 text-sm font-bold">{p.name}</td><td className="p-4 text-right text-blue-600 font-bold">{formatIDR(p.isp)}</td></tr>))}</tbody>
                                 </table>
                             </div>
                         )}
                     </main>
 
-                    {/* MODAL PENAWARAN */}
                     {isModalOpen && selectedLead && (
                         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 modal-overlay">
                             <div className="bg-white w-full max-w-5xl rounded-[3.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
                                 <div className="p-6 bg-blue-600 text-white flex justify-between items-center">
-                                    <h2 className="font-black uppercase">{selectedLead.company}</h2>
+                                    <h2 className="font-black uppercase text-sm tracking-widest">{selectedLead.company}</h2>
                                     <button onClick={() => setIsModalOpen(false)} className="bg-white/20 p-2 rounded-xl text-[10px] font-black px-4 py-2">Tutup</button>
                                 </div>
                                 <div className="p-8 flex flex-col md:flex-row gap-8 overflow-hidden">
                                     <div className="md:w-72 space-y-6 shrink-0">
                                         <div><p className="text-[10px] font-black text-slate-400 uppercase mb-2">Pilih Produk</p>
-                                            <select className="w-full p-3 border rounded-xl text-xs font-bold" onChange={e => handleAddProduct(e.target.value)} value="">
-                                                <option value="" disabled>-- Klik untuk Pilih Produk --</option>
+                                            <select className="w-full p-3 border rounded-xl text-xs font-bold" onChange={e => {
+                                                const p = masterPrices.find(x => x.id === parseInt(e.target.value));
+                                                if (p && !quoteItems.find(q => q.id === p.id)) setQuoteItems([...quoteItems, { ...p, qty: 1, currentPrice: priceGroup === 'MSRP' ? p.msrp : p.isp }]);
+                                            }} value="">
+                                                <option value="" disabled>-- Pilih Produk --</option>
                                                 {masterPrices.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                                             </select>
                                         </div>
                                         <div className="flex flex-col gap-2">
                                             {['ISP', 'MSRP', 'Special'].map(g => (
-                                                <button key={g} onClick={() => setPriceGroup(g)} className={`p-3 rounded-xl text-[10px] font-black border-2 transition-all ${priceGroup === g ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white text-slate-400'}`}>{g}</button>
+                                                <button key={g} onClick={() => setPriceGroup(g)} className={`p-3 rounded-xl text-[10px] font-black border-2 transition-all ${priceGroup === g ? 'bg-blue-600 border-blue-600 text-white shadow-md' : 'bg-white text-slate-400'}`}>{g}</button>
                                             ))}
                                         </div>
                                     </div>
@@ -215,8 +217,7 @@
                                         <div className="flex-1 overflow-y-auto custom-scroll space-y-3">
                                             {quoteItems.map(item => (
                                                 <div key={item.id} className="p-4 bg-slate-50 rounded-2xl border flex justify-between items-center">
-                                                    <div className="flex-1">
-                                                        <p className="text-[11px] font-bold text-slate-700">{item.name}</p>
+                                                    <div className="flex-1"><p className="text-[11px] font-bold text-slate-700 leading-tight mb-2">{item.name}</p>
                                                         {priceGroup === 'Special' ? (
                                                             <input type="number" className="bg-white border rounded px-2 py-1 text-xs w-32" value={item.currentPrice} onChange={e => setQuoteItems(quoteItems.map(q => q.id === item.id ? {...q, currentPrice: parseInt(e.target.value) || 0} : q))}/>
                                                         ) : <p className="text-xs font-black text-blue-600">{formatIDR(item.currentPrice)}</p>}
@@ -231,8 +232,11 @@
                                             ))}
                                         </div>
                                         <div className="mt-6 p-6 bg-slate-900 rounded-[2rem] flex justify-between items-center text-white">
-                                            <div><p className="text-[10px] opacity-50 uppercase">Total</p><h3 className="text-xl font-black">{formatIDR(quoteItems.reduce((a,b)=>a+(b.currentPrice*b.qty),0))}</h3></div>
-                                            <button onClick={downloadPDF} className="bg-blue-600 px-8 py-3 rounded-xl text-[10px] font-black uppercase">Unduh PDF</button>
+                                            <div><p className="text-[10px] opacity-50 uppercase">Total Estimasi</p><h3 className="text-xl font-black text-blue-400">{formatIDR(quoteItems.reduce((a,b)=>a+(b.currentPrice*b.qty),0))}</h3></div>
+                                            <div className="flex gap-2">
+                                                <button onClick={sendWhatsApp} className="bg-green-600 px-6 py-3 rounded-xl text-[10px] font-black uppercase flex items-center gap-2"><i data-lucide="message-square" size={14}></i> Chat WA</button>
+                                                <button onClick={downloadPDF} className="bg-blue-600 px-6 py-3 rounded-xl text-[10px] font-black uppercase">Unduh PDF</button>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
